@@ -7,6 +7,7 @@
  * Hint in insert and emplace_hint must be element that should FOLLOW inserting element.
  *
  */
+
 #pragma once
 #ifndef __JAKUB_NOWAK_TREAP_H
 #define __JAKUB_NOWAK_TREAP_H
