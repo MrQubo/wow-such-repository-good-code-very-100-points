@@ -17,6 +17,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <algorithm>
 
 // treap<T, CompareType, URNG>
 template< class T, class CompareType = std::less<T>, class URNG = std::default_random_engine >
@@ -48,9 +49,9 @@ URNG        radom;
 ///////////////////////////// END DECLARATIONS /////////////////////////////
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 ///////////////////////////// BEGIN ERRORS AND WARNINGS /////////////////////////////
-static constexpr char const * const _err  = static_cast<const char * const>( "FatalError: " );
-static constexpr char const * const _warn = static_cast<const char * const>( "Warn: "       );
-static constexpr char const * const _note = static_cast<const char * const>( "Note: "       );
+static constexpr char const * const _err  = static_cast<char const * const>( "FatalError: " );
+static constexpr char const * const _warn = static_cast<char const * const>( "Warn: "       );
+static constexpr char const * const _note = static_cast<char const * const>( "Note: "       );
 static constexpr void _err_lowest_on_empty() {
     std::cerr << _err << "Using lowest() on empty treap" << std::endl;
     exit( EXIT_FAILURE );
@@ -152,61 +153,81 @@ static constexpr void _warn_merge_inequal_radom_using_second() {
 	_warn_merge_inequal_radom();
 	std::cerr << _warn << "Using object of type URNG from second treap" << std::endl;
 }
+static constexpr void handle_exception() {
+	std::cerr << _err << "Caught unrecognised exception!" << std::endl;
+	exit( EXIT_FAILURE );
+}
+static void handle_exception( std::exception & e ) {
+	std::cerr << _err << "Caught exception," << std::endl;
+	std::cerr << _err << e.what() << std::endl;
+	exit( EXIT_FAILURE );
+}
 ///////////////////////////// END ERRORS AND WARNINGS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 ///////////////////////////// BEGIN CONSTRUCTORS /////////////////////////////
 constexpr treap()
 	: treap( {} ) {}
 explicit constexpr treap( std::initializer_list<T> const & _il )
-	: treap( _il, CompareType(), URNG( 720553160 ) ) {}
+	try: treap( _il, CompareType(), URNG( 720553160 ) ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 explicit treap( CompareType const & _compare )
-	: treap( {}, _compare, URNG( 755858114 ) ) {}
+	try: treap( {}, _compare, URNG( 755858114 ) ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 explicit treap( URNG && _radom )
-	: treap( {}, CompareType(), std::move( _radom ) ) {}
+	try: treap( {}, CompareType(), std::move( _radom ) ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare )
-	: treap( _il, _compare, URNG( 20553730 ) ) {}
+	try: treap( _il, _compare, URNG( 20553730 ) ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 explicit treap( std::initializer_list<T> const & _il, URNG && _radom )
-	: treap( _il, CompareType(), std::move( _radom ) ) {}
+	try: treap( _il, CompareType(), std::move( _radom ) ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 explicit treap( CompareType const & _compare, URNG && _radom )
-	: treap( {}, _compare, std::move( _radom ) ) {}
+	try: treap( {}, _compare, std::move( _radom ) ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 // main constructor
-explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare, URNG && _radom)
-	: root( nullptr ), guard( nullptr ), compare( _compare ), radom( std::move( _radom ) ) {
+explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare, URNG && _radom )
+	try: root( nullptr ), guard( nullptr ), compare( _compare ), radom( std::move( _radom ) ) {
 		for( T const & val : _il ) insert( val );
-}
+}   catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 // copy contructor
 treap( treap const & _other )
-	: root( nullptr ), guard( nullptr ), compare( _other.compare ), radom( _other.radom ) {
+	try : root( nullptr ), guard( nullptr ), compare( _other.compare ), radom( _other.radom ) {
 		copy( _other );
-}
+}   catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 // copy assigment
-treap & operator=( treap const & _other ) {
+treap & operator=( treap const & _other ) try {
 	clear();
 	compare = CompareType( _other.compare );
 	radom   = URNG( _other.radom );
 	copy( _other );
 	return * this;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 // move contructor
-treap( treap && _other )
+treap( treap && _other ) try
 	: root( std::move( _other.root ) ),
 	  guard( nullptr ),
 	  compare( std::move( _other.compare ) ),
 	  radom( std::move( _other.radom ) ) {
 		_other.root = nullptr;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 // move assigment
-treap & operator=( treap && _other ) {
+treap & operator=( treap && _other ) try {
 	clear();
 	root        = std::move( _other.root );
-	compare     = CompareType( std::move( _other.compare ) );
-	radom       = URNG( std::move( _other.radom ) );
+	compare     = std::move( _other.compare );
+	radom       = std::move( _other.radom );
 	_other.root = nullptr;
 	return * this;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 // destructor
 ~treap() { clear(); }
@@ -262,22 +283,23 @@ const_iterator lower_bound( T const & val ) const { return lower_bound_internal(
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 iterator lower_bound_internal( T const & val ) const {
 	if( empty() ) return ncend();
-	node const * _node( root );
-	node const * best_so_far( nullptr );
-	while( true )
-		if( ! m_compare( _node->key, val ) ) {
-            if( ! _node->has_left() ) return iterator( _node );
-            best_so_far = _node;
-            _node = _node->left;
+	node * _node( root );
+	node * best_so_far( nullptr );
+	while( true ) {
+		if( m_compare( val, _node->key ) ) {
+			if( ! _node->has_left() ) return iterator( _node );
+			best_so_far = _node;
+			_node = _node->left;
 		} else {
-			if( ! _node->has_right() ) return iterator( best_so_far );
-            _node = _node->right;
+			if( ! _node->has_right() ) return lower_bound_internal_best_so_far( best_so_far );
+			_node = _node->right;
 		}
+	}
 }
-//iterator lower_bound_internal_found_equal( node const * _node ) const {
-//	while( _node->has_left() ) _node = _node->left;
-//	return iterator( _node );
-//}
+iterator lower_bound_internal_best_so_far( node * const best_so_far ) const {
+    if( best_so_far == nullptr ) return ncend();
+    return iterator( best_so_far );
+}
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
 iterator       upper_bound()       { return ncend(); }
@@ -289,32 +311,33 @@ const_iterator upper_bound( T const & val ) const { return upper_bound_internal(
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 iterator upper_bound_internal( T const & val ) const {
 	if( empty() ) return ncend();
-	node const * _node( root );
-	node const * best_so_far( nullptr );
-	while( true )
-		if( m_compare( val, _node->key ) ) {
-            if( ! _node->has_left() ) return iterator( _node );
-            best_so_far = _node;
-            _node = _node->left;
+	node * _node( root );
+	node * best_so_far( nullptr );
+	while( true ) {
+		if( ! m_compare( _node->key, val ) ) {
+			if( ! _node->has_left() ) return iterator( _node );
+			best_so_far = _node;
+			_node = _node->left;
 		} else {
-			if( ! _node->has_right() ) return iterator( best_so_far );
-            _node = _node->right;
+			if( ! _node->has_right() ) return upper_bound_internal_best_so_far( best_so_far );
+			_node = _node->right;
 		}
+	}
+}
+iterator upper_bound_internal_best_so_far( node * const best_so_far ) const {
+    if( best_so_far == nullptr ) return ncend();
+    return iterator( best_so_far );
 }
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
 std::pair<treap, treap> split( T const & val ) {
 	node * const _new_node( new node( val, 1.1 ) );
     insert_node( _new_node );
-    std::cout << "after insert:" << std::endl;
-    wypisz();
     treap	treap_first( compare, URNG( radom ) ),
 			treap_second( compare, URNG( radom ) );
     copy_recursion( treap_first .root, root->left );
     copy_recursion( treap_second.root, root->right );
     erase( iterator( _new_node ) );
-    std::cout << "after erase:" << std::endl;
-    wypisz();
     return std::make_pair( treap_first, treap_second );
 }
 std::pair<treap, treap> split( T const & val ) const {
@@ -331,47 +354,46 @@ static bool can_merge( treap const & treap_first, treap const & treap_second ) {
 }
 
 static treap merge( treap const & treap_first, treap const & treap_second ) {
+	if( treap_first .empty() ) return treap_second;
+	if( treap_second.empty() ) return treap_first;
+
 	if( ! treap_first.m_compare( treap_second.lowest(), treap_first.highest() ) ) {
-		if( treap_first.compare != treap_second.compare ) _warn_merge_inequal_compare_using_first();
-		if( treap_first.radom != treap_second.radom ) _warn_merge_inequal_radom_using_first();
 		return merge_fast( treap_first, treap_second );
     } else if( ! treap_second.m_compare( treap_first.lowest(), treap_second.highest() ) ) {
-		if( treap_first.compare != treap_second.compare ) _warn_merge_inequal_compare_using_second();
-		if( treap_first.radom != treap_second.radom ) _warn_merge_inequal_radom_using_second();
 		return merge_fast( treap_second, treap_first );
     } else _err_can_not_merge();
 }
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-static treap merge_fast( treap const & treap_first, treap const & treap_second ) {
+static treap merge_fast( treap const & treap_first, treap const & treap_second ) try {
     treap treap_merged( treap_first.compare, URNG( treap_first.radom ) );
-    treap_merged.root = new node( treap_first.highest() );
+    treap_merged.root = new node( *treap_first.ncrbegin().elem );
     copy_recursion( treap_merged.root->left , treap_first .root, treap_merged.root );
     copy_recursion( treap_merged.root->right, treap_second.root, treap_merged.root );
     treap_merged.erase( iterator( treap_merged.root ) );
     return treap_merged;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
-key_compare      key_comp  () const { return compare; }
-value_compare    value_comp() const { return compare; }
-random_generator random_gen() const { return radom  ; }
+key_compare      key_comp  () const try { return compare; } catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+value_compare    value_comp() const try { return compare; } catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+random_generator random_gen() const try { return radom  ; } catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 ///////////////////////////// END ASK METHODS /////////////////////////////
 ///////////////////////////// BEGIN ITERATORS METHODS /////////////////////////////
 iterator begin() {
 	if( empty() ) return ncend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_left() ) _node = _node->left;
 	return iterator( _node );
 }
 const_iterator begin() const {
 	if( empty() ) return cend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_left() ) _node = _node->left;
 	return const_iterator( _node );
 }
 const_iterator cbegin() const {
 	if( empty() ) return cend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_left() ) _node = _node->left;
 	return const_iterator( _node );
 }
@@ -402,12 +424,12 @@ const_reverse_iterator crend() const { return const_reverse_iterator ( root, tru
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 iterator ncbegin() const {
 	if( empty() ) return ncend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_left() ) _node = _node->left;
 	return iterator( _node );
 }
 reverse_iterator ncrbegin() const {
-	if( empty() ) return rend();
+	if( empty() ) return ncrend();
 	node const * _node( root );
 	while( _node->has_right() ) _node = _node->right;
 	return reverse_iterator( _node );
@@ -460,13 +482,13 @@ size_type erase( T const & val ) {
 }
 
 // returns copy of erased element
-T erase( const_iterator it ) {
+T erase( const_iterator it ) try {
 	if( it == cend() ) _err_erase_past_the_end();
 	if( iterator_invalid( it ) ) _err_erase_invalid_iterator();
 	T value_copy = T( *it );
 	erase_internal( it.elem );
 	return value_copy;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 void erase_internal( node * const _node ) {
 	insert_guard( _node );
@@ -518,13 +540,13 @@ void clear() {
 }
 ///////////////////////////// END CHANGING METHODS /////////////////////////////
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-bool equal( T const & first, T const & second ) {
-	return ( compare( first, second ) == compare( second, first ) );
-}
-bool m_compare( T const & first, T const & second ) {
+///////////////////////////// BEGIN COMPARE METHODS /////////////////////////////
+bool equal( T const & first, T const & second ) const { return ( compare( first, second ) == compare( second, first ) ); }
+bool m_compare( T const & first, T const & second ) const try {
     if( equal( first, second ) ) return true;
     return compare( first, second );
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+///////////////////////////// END COMPARE METHODS /////////////////////////////
 ///////////////////////////// BEGIN ROTATION /////////////////////////////
 void rotation( node * const _node ) {
     while( _node->has_ancestor() && _node->priority > _node->ancestor->priority )
@@ -586,37 +608,45 @@ node *  right;
 //////////////// END DECLARATIONS ////////////////
 //////////////// BEGIN CONSTRUCTORS ////////////////
 explicit node( T const & _key, URNG & _radom )
-	: node(
+	try: node(
 		_key,
 		std::generate_canonical<float, 0>( _radom )
 	) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 explicit constexpr node( T const & _key, float _priority )
-	: key( _key ),
-	  priority( _priority ),
-	  ancestor( nullptr ),
-	  left( nullptr ),
-	  right( nullptr ) {}
+	try: key( _key ),
+	     priority( _priority ),
+	     ancestor( nullptr ),
+	     left( nullptr ),
+         right( nullptr ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 template< typename... Args >
 explicit node( URNG & _radom, Args... _args )
-	: node(
+	try: node(
 		std::generate_canonical<float, 0>( _radom ),
 		_args...
 	) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 template< typename... Args >
 explicit constexpr node( const float _priority, Args... _args )
-	: key     ( _args... ),
-	  priority( _priority ),
-	  ancestor( nullptr ),
-	  left    ( nullptr ),
-	  right   ( nullptr ) {}
+	try: key     ( _args... ),
+	     priority( _priority ),
+	     ancestor( nullptr ),
+	     left    ( nullptr ),
+	     right   ( nullptr ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 node( node const & _other )
-	: key     ( _other.key ),
-	  priority( _other.priority ),
-	  ancestor( nullptr ),
-	  left    ( nullptr ),
-	  right   ( nullptr ) {}
+	try: key     ( _other.key ),
+         priority( _other.priority ),
+         ancestor( nullptr ),
+         left    ( nullptr ),
+		 right   ( nullptr ) {}
+	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+
 node& operator=( node const & ) = delete;
 node( node && )                 = delete;
 node& operator=( node && )      = delete;
@@ -689,7 +719,7 @@ bool operator!=( iterator const & _other ) const { return ! operator==( _other )
 iterator & operator++() {
 	if( elem == nullptr ) _err_incrementing_invalid();
 	if( is_end ) _err_incrementing_past_the_end();
-    node const * _node( elem );
+    node * _node( elem );
     elem = nullptr;
     if( _node->has_right() ) {
 		_node = _node->right;
@@ -713,7 +743,7 @@ iterator operator++( int ) {
 
 iterator & operator--() {
 	if( elem == nullptr ) _err_decrementing_invalid();
-	node const * _node( elem );
+	node * _node( elem );
 	elem = nullptr;
 	if( is_end ) {
 		is_end = false;
@@ -736,11 +766,11 @@ iterator operator--( int ) {
 	return self;
 }
 
-T const & operator*() const {
+T const & operator*() const try {
 	if( is_end ) _err_dereference_past_the_end();
 	if( elem == nullptr ) _err_dereference_invalid();
 	return elem->key;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 operator const_iterator() { return const_iterator( * this ); }
 //////////////// END OPERATORS ////////////////
@@ -791,7 +821,7 @@ bool operator!=( const_iterator const & _other ) const { return ! operator==( _o
 const_iterator & operator++() {
 	if( elem == nullptr ) _err_incrementing_invalid();
 	if( is_end ) _err_incrementing_past_the_end();
-    node const * _node( elem );
+    node * _node( elem );
     elem = nullptr;
     if( _node->has_right() ) {
 		_node = _node->right;
@@ -815,7 +845,7 @@ const_iterator operator++( int ) {
 
 const_iterator & operator--() {
 	if( elem == nullptr ) _err_decrementing_invalid();
-	node const * _node( elem );
+	node * _node( elem );
 	elem = nullptr;
 	if( is_end ) {
 		is_end = false;
@@ -838,11 +868,11 @@ const_iterator operator--( int ) {
 	return self;
 }
 
-T const & operator*() const {
+T const & operator*() const try {
 	if( is_end ) _err_dereference_past_the_end();
 	if( elem == nullptr ) _err_dereference_invalid();
 	return elem->key;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 //////////////// END OPERATORS ////////////////
 
 };
@@ -859,9 +889,9 @@ bool         is_end;
 //////////////// END DECLARATIONS ////////////////
 //////////////// BEGIN CONSTRUCTORS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
-explicit reverse_iterator( node const * _elem_ptr )
+explicit reverse_iterator( node const * const _elem_ptr )
 	: elem( _elem_ptr ), is_end( false ) {}
-explicit reverse_iterator( node const * _elem_ptr, bool _is_end )
+explicit reverse_iterator( node const * const _elem_ptr, bool _is_end )
 	: elem( _elem_ptr ), is_end( _is_end ) {}
 public: //////////////////////////////////////////////////// PUBLIC
 reverse_iterator( reverse_iterator const & _other )
@@ -934,11 +964,11 @@ reverse_iterator operator--( int ) {
 	return self;
 }
 
-T const & operator*() const {
+T const & operator*() const try {
 	if( is_end ) _err_dereference_past_the_rend();
 	if( elem == nullptr ) _err_dereference_invalid_r();
 	return elem->key;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 operator const_reverse_iterator() { return const_reverse_iterator( * this ); }
 //////////////// END OPERATORS ////////////////
@@ -957,9 +987,9 @@ bool         is_end;
 //////////////// END DECLARATIONS ////////////////
 //////////////// BEGIN CONSTRUCTORS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
-explicit const_reverse_iterator( const node* _elem_ptr )
+explicit const_reverse_iterator( node const * const _elem_ptr )
 	: elem( _elem_ptr ), is_end( false ) {}
-explicit const_reverse_iterator( const node* _elem_ptr, bool _is_end )
+explicit const_reverse_iterator( node const * const _elem_ptr, bool _is_end )
 	: elem( _elem_ptr ), is_end( _is_end ) {}
 public: //////////////////////////////////////////////////// PUBLIC
 const_reverse_iterator( reverse_iterator const & _it )
@@ -1034,11 +1064,11 @@ const_reverse_iterator operator--( int ) {
 	return self;
 }
 
-T const & operator*() const {
+T const & operator*() const try {
 	if( is_end ) _err_dereference_past_the_rend();
 	if( elem == nullptr ) _err_dereference_invalid_r();
 	return elem->key;
-}
+} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 //////////////// END OPERATORS ////////////////
 
 };
