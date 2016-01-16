@@ -19,6 +19,8 @@
 #include <initializer_list>
 #include <iterator>
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 
 // treap<T, CompareType, URNG>
 template< class T, class CompareType = std::less<T>, class URNG = std::default_random_engine >
@@ -26,10 +28,10 @@ class treap {
 
 ///////////////////////////// BEGIN TYPEDEFS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-typedef T           key_type;
-typedef T           value_type;
-typedef CompareType key_compare;
-typedef CompareType value_compare;
+typedef T           key_type        ;
+typedef T           value_type      ;
+typedef CompareType key_compare     ;
+typedef CompareType value_compare   ;
 typedef URNG        random_generator;
 
 typedef unsigned long long size_type;
@@ -37,201 +39,155 @@ typedef unsigned long long size_type;
 
 ///////////////////////////// BEGIN DECLARATIONS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-class iterator;
-class const_iterator;
-class reverse_iterator;
+class               iterator;
+class         const_iterator;
+class       reverse_iterator;
 class const_reverse_iterator;
+
+struct empty_treap;
+struct iterator_error;
+	struct past_the_end_error;
+		struct dereference_past_the_end;
+		struct incrementing_past_the_end;
+		struct erase_past_the_end;
+	struct before_begin_error;
+		struct decrementing_before_begin;
+	struct invalid_iterator;
+		struct operation_invalid;
+		struct erase_invalid_iterator;
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-class       node;
-node *      root;
-node *      guard;
+class  node;
+struct node_emplace;
+
+node *      root   ;
 CompareType compare;
-URNG        radom;
+URNG        radom  ;
 ///////////////////////////// END DECLARATIONS /////////////////////////////
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 ///////////////////////////// BEGIN ERRORS AND WARNINGS /////////////////////////////
-static constexpr char const * const _err  = static_cast<char const * const>( "FatalError: " );
-static constexpr char const * const _warn = static_cast<char const * const>( "Warn: "       );
-static constexpr char const * const _note = static_cast<char const * const>( "Note: "       );
-static constexpr void _err_lowest_on_empty() {
-    std::cerr << _err << "Using lowest() on empty treap" << std::endl;
-    exit( EXIT_FAILURE );
+private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
+static std::string get_err_str( std::string const & return_type, std::string const & function_name, std::string const & message ) {
+	return "In function '" + return_type + " treap<T, CompareType, URNG>::" + function_name + "':\n    " + message + "\n";
 }
-static constexpr void _err_highest_on_empty() {
-    std::cerr << _err << "Using highest() on empty treap" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_dereference_past_the_end() {
-	std::cerr << _err << "Attempt to dereference past-the-end iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_dereference_past_the_rend() {
-	std::cerr << _err << "Attempt to dereference past-the-rend reverse iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_incrementing_past_the_end() {
-	std::cerr << _err << "Attempt to increment past-the-end iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_incrementing_past_the_rend() {
-	std::cerr << _err << "Attempt to increment past-the-rend reverse iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_decrementing_begin() {
-    std::cerr << _err << "Attempt to decrement iterator pointing to begin" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_decrementing_rbegin() {
-    std::cerr << _err << "Attempt to decrement reverse iterator pointing to rbegin" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_dereference_invalid() {
-	std::cerr << _err << "Attempt to dereference no more valid iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_dereference_invalid_r() {
-	std::cerr << _err << "Attempt to dereference no more valid reverse iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_incrementing_invalid() {
-	std::cerr << _err << "Attemp to increment no more valid iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_decrementing_invalid() {
-	std::cerr << _err << "Attemp to decrement no more valid iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_incrementing_invalid_r() {
-	std::cerr << _err << "Attemp to increment no more valid reverse iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_decrementing_invalid_r() {
-	std::cerr << _err << "Attemp to decrement no more valid reverse iterator" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _err_erase_past_the_end() {
-    std::cerr << _err << "Attempt to erase past-the-end iterator" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_erase_past_the_rend() {
-    std::cerr << _err << "Attempt to erase past-the-rend reverse iterator" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_erase_invalid_iterator() {
-	std::cerr << _err << "Attempt to erase no more valid iterator" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_erase_invalid_iterator_r() {
-	std::cerr << _err << "Attempt to erase no more valid reverse iterator" << std::endl;
-    exit( EXIT_FAILURE );
-}
-static constexpr void _err_can_not_merge() {
-	std::cerr << _err  << "Treaps can not be merged," << std::endl;
-	std::cerr << _err  << "None of two treaps have higher lowest value than higher value of other treap," << std::endl;
-	std::cerr << _note << "Use function treap::can_merge to check if treaps can be merged," << std::endl;
-	std::cerr << _note << "Instead try to iterate over values from one treap and insert them to second treap" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static constexpr void _warn_merge_inequal_compare() {
-	std::cerr << _warn << "Merging two treaps with inequal objects of type CompareType," << std::endl;
-}
-static constexpr void _warn_merge_inequal_compare_using_first() {
-	_warn_merge_inequal_compare();
-	std::cerr << _warn << "Using object of type CompareType from first treap" << std::endl;
-}
-static constexpr void _warn_merge_inequal_compare_using_second() {
-	_warn_merge_inequal_compare();
-	std::cerr << _warn << "Using object of type CompareType from second treap" << std::endl;
-}
-static constexpr void _warn_merge_inequal_radom() {
-	std::cerr << _warn << "Merging two treaps with inequal objects of type URNG," << std::endl;
-}
-static constexpr void _warn_merge_inequal_radom_using_first() {
-	_warn_merge_inequal_radom();
-	std::cerr << _warn << "Using object of type URNG from first treap" << std::endl;
-}
-static constexpr void _warn_merge_inequal_radom_using_second() {
-	_warn_merge_inequal_radom();
-	std::cerr << _warn << "Using object of type URNG from second treap" << std::endl;
-}
-static constexpr void handle_exception() {
-	std::cerr << _err << "Caught unrecognised exception!" << std::endl;
-	exit( EXIT_FAILURE );
-}
-static void handle_exception( std::exception & e ) {
-	std::cerr << _err << "Caught exception," << std::endl;
-	std::cerr << _err << e.what() << std::endl;
-	exit( EXIT_FAILURE );
-}
+public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
+struct empty_treap: std::runtime_error {
+	explicit empty_treap( std::string const & return_type, std::string const & function_name )
+		: std::runtime_error( get_err_str( return_type, function_name, "Treap is empty" ) ) {}
+};
+struct iterator_error: std::runtime_error {
+	explicit iterator_error( std::string const & return_type, std::string const & function_name, std::string const & message )
+		: std::runtime_error( get_err_str( return_type, function_name, message ) ) {}
+};
+struct past_the_end_error: iterator_error {
+	explicit past_the_end_error( std::string const & return_type, std::string const & function_name, std::string const & message )
+		: iterator_error( return_type, function_name, message ) {}
+};
+struct dereference_past_the_end: past_the_end_error {
+	explicit dereference_past_the_end( std::string const & return_type, std::string const & function_name )
+		: past_the_end_error( return_type, function_name, "Attempt to dereference past-the-end iterator" ) {}
+};
+struct incrementing_past_the_end: past_the_end_error {
+	explicit incrementing_past_the_end( std::string const & return_type, std::string const & function_name )
+		: past_the_end_error( return_type, function_name, "Attempt to increment past-the-end iterator" ) {}
+};
+struct erase_past_the_end: past_the_end_error {
+	explicit erase_past_the_end( std::string const & return_type, std::string const & function_name )
+		: past_the_end_error( return_type, function_name, "Attempt to erase past-the-end iterator" ) {}
+};
+struct before_begin_error: iterator_error {
+	explicit before_begin_error( std::string const & return_type, std::string const & function_name, std::string const & message )
+		: iterator_error( return_type, function_name, message ) {}
+};
+struct decrementing_before_begin: before_begin_error {
+	explicit decrementing_before_begin( std::string const & return_type, std::string const & function_name )
+		: before_begin_error( return_type, function_name, "Attempt to decrement iterator pointing to begin" ) {}
+};
+struct invalid_iterator: iterator_error {
+	explicit invalid_iterator( std::string const & return_type, std::string const & function_name, std::string const & message )
+		: iterator_error( return_type, function_name, message ) {}
+};
+struct operation_invalid: invalid_iterator {
+	explicit operation_invalid( std::string const & return_type, std::string const & function_name )
+		: invalid_iterator( return_type, function_name, "Invalid use of invalid iterator" ) {}
+};
+struct erase_invalid_iterator: invalid_iterator {
+	explicit erase_invalid_iterator( std::string const & return_type, std::string const & function_name )
+		: invalid_iterator( return_type, function_name, "Attempt to erase invalid iterator" ) {}
+};
 ///////////////////////////// END ERRORS AND WARNINGS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 ///////////////////////////// BEGIN CONSTRUCTORS /////////////////////////////
-constexpr treap()
+treap()
 	: treap( {} ) {}
-explicit constexpr treap( std::initializer_list<T> const & _il )
-	try: treap( _il, CompareType(), URNG( 720553160 ) ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+explicit treap( std::initializer_list<T> const & _il )
+	: treap( _il, CompareType(), URNG( 720553160 ) ) {}
 
 explicit treap( CompareType const & _compare )
-	try: treap( {}, _compare, URNG( 755858114 ) ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+	: treap( {}, _compare, URNG( 755858114 ) ) {}
 
 explicit treap( URNG && _radom )
-	try: treap( {}, CompareType(), std::move( _radom ) ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+	: treap( {}, CompareType(), std::move( _radom ) ) {}
 
 explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare )
-	try: treap( _il, _compare, URNG( 20553730 ) ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+	: treap( _il, _compare, URNG( 20553730 ) ) {}
 
 explicit treap( std::initializer_list<T> const & _il, URNG && _radom )
-	try: treap( _il, CompareType(), std::move( _radom ) ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+	: treap( _il, CompareType(), std::move( _radom ) ) {}
 
 explicit treap( CompareType const & _compare, URNG && _radom )
-	try: treap( {}, _compare, std::move( _radom ) ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+	: treap( {}, _compare, std::move( _radom ) ) {}
 
 // main constructor
 explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare, URNG && _radom )
-	try: root( nullptr ), guard( nullptr ), compare( _compare ), radom( std::move( _radom ) ) {
+	: root( nullptr ), compare( _compare ), radom( std::move( _radom ) ) {
 		for( T const & val : _il ) insert( val );
-}   catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
 
 // copy contructor
 treap( treap const & _other )
-	try : root( nullptr ), guard( nullptr ), compare( _other.compare ), radom( _other.radom ) {
+	: root( nullptr ), compare( _other.compare ), radom( _other.radom ) {
 		copy( _other );
-}   catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
+
 // copy assigment
-treap & operator=( treap const & _other ) try {
+treap & operator=( treap const & _other ) {
+	if( this == &_other ) return *this;
 	clear();
 	compare = CompareType( _other.compare );
 	radom   = URNG( _other.radom );
 	copy( _other );
 	return * this;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
 
 // move contructor
-treap( treap && _other ) try
-	: root( std::move( _other.root ) ),
-	  guard( nullptr ),
+treap( treap && _other )
+	noexcept(
+		noexcept( CompareType( std::move( _other.compare ) ) ) &&
+		noexcept( URNG( std::move( _other.radom ) ) )
+	)
+	: root   ( std::move( _other.root ) ),
 	  compare( std::move( _other.compare ) ),
-	  radom( std::move( _other.radom ) ) {
+	  radom  ( std::move( _other.radom ) ) {
 		_other.root = nullptr;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
+
 // move assigment
-treap & operator=( treap && _other ) try {
+treap & operator=( treap && _other )
+	noexcept(
+		noexcept( CompareType::operator=( std::move( _other.compare ) ) ) &&
+		noexcept( URNG::operator=( std::move( _other.radom ) ) )
+	) {
+	if( this == &_other ) return *this;
+	std::cout << "foo" << std::endl;
 	clear();
 	root        = std::move( _other.root );
 	compare     = std::move( _other.compare );
 	radom       = std::move( _other.radom );
 	_other.root = nullptr;
 	return * this;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
 
 // destructor
-~treap() { clear(); }
+~treap() noexcept { clear(); }
 
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 void copy( treap const & _other ) { copy_recursion( root, _other.root ); }
@@ -245,15 +201,20 @@ static void copy_recursion( node * & _node, node const * const _other_node, node
 ///////////////////////////// END CONSTRUCTORS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 ///////////////////////////// BEGIN ASK METHODS /////////////////////////////
-bool empty() const { return root == nullptr; }
+bool empty() const noexcept { return root == nullptr; }
+
+size_type size() const noexcept {
+	if( empty() ) return 0;
+	return root->count();
+}
 
 T lowest() const {
-    if( empty() ) _err_lowest_on_empty();
-    return * begin();
+    if( empty() ) throw empty_treap( "T", "lowest()" );
+    return * cbegin();
 }
 T highest() const {
-    if( empty() ) _err_highest_on_empty();
-    return * rbegin();
+    if( empty() ) throw empty_treap( "T", "highest()" );
+    return * crbegin();
 }
 
 bool contains( T const & val ) const { return find( val ) != cend(); }
@@ -262,13 +223,13 @@ iterator       find( T const & val )       { return find_internal( val ); }
 const_iterator find( T const & val ) const { return find_internal( val ); }
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 iterator find_internal( T const & val ) const {
-    node const * _node( root );
+    node * _node( root );
     while( _node != nullptr )
-        if( m_compare( _node->key, val ) ) {
-			if( m_compare( val, _node->key ) ) return iterator( _node );
+        if( eq_compare( _node->key, val ) ) {
+			if( eq_compare( val, _node->key ) ) return iterator( _node );
 			_node = _node->right;
         } else {
-			if( ! m_compare( val, _node->key ) ) return iterator( _node );
+			if( ! eq_compare( val, _node->key ) ) return iterator( _node );
 			_node = _node->left;
         }
 	return ncend();
@@ -287,7 +248,7 @@ iterator lower_bound_internal( T const & val ) const {
 	node * _node( root );
 	node * best_so_far( nullptr );
 	while( true ) {
-		if( m_compare( val, _node->key ) ) {
+		if( eq_compare( val, _node->key ) ) {
 			if( ! _node->has_left() ) return iterator( _node );
 			best_so_far = _node;
 			_node = _node->left;
@@ -315,7 +276,7 @@ iterator upper_bound_internal( T const & val ) const {
 	node * _node( root );
 	node * best_so_far( nullptr );
 	while( true ) {
-		if( ! m_compare( _node->key, val ) ) {
+		if( ! eq_compare( _node->key, val ) ) {
 			if( ! _node->has_left() ) return iterator( _node );
 			best_so_far = _node;
 			_node = _node->left;
@@ -331,26 +292,29 @@ iterator upper_bound_internal_best_so_far( node * const best_so_far ) const {
 }
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
-std::pair<treap, treap> split( T const & val ) {
-	node * const _new_node( new node( val, 1.1 ) );
+std::pair<treap, treap> split( T const & val ) try {
+	node * _new_node( new node( val, 1.1 ) );
     insert_node( _new_node );
     treap	treap_first( compare, URNG( radom ) ),
 			treap_second( compare, URNG( radom ) );
     copy_recursion( treap_first .root, root->left );
     copy_recursion( treap_second.root, root->right );
-    erase( iterator( _new_node ) );
+    erase_internal( _new_node );
     return std::make_pair( treap_first, treap_second );
+} catch( ... ) {
+	if( root != nullptr && root->priority > 1.01 ) erase_internal( root );
+	throw;
 }
 std::pair<treap, treap> split( T const & val ) const {
 	treap treap_copy = treap( * this );
     return treap_copy.split( val );
 }
 
-static bool can_merge( treap const & treap_first, treap const & treap_second ) {
+// if true, than merge is logarithmic ( move ) or linear ( copy ), otherwise linear-logarithmic
+static bool can_fast_merge( treap const & treap_first, treap const & treap_second ) {
     return (
-		! treap_first .m_compare( treap_second.lowest(), treap_first .highest() )
-		||
-		! treap_second.m_compare( treap_first .lowest(), treap_second.highest() )
+		! treap_first .ne_compare( treap_second.lowest(), treap_first .highest() ) ||
+		! treap_second.ne_compare( treap_first .lowest(), treap_second.highest() )
     );
 }
 
@@ -358,26 +322,59 @@ static treap merge( treap const & treap_first, treap const & treap_second ) {
 	if( treap_first .empty() ) return treap_second;
 	if( treap_second.empty() ) return treap_first;
 
-	if( ! treap_first.m_compare( treap_second.lowest(), treap_first.highest() ) ) {
+	if( ! treap_first.ne_compare( treap_second.lowest(), treap_first.highest() ) ) {
 		return merge_fast( treap_first, treap_second );
-    } else if( ! treap_second.m_compare( treap_first.lowest(), treap_second.highest() ) ) {
+    } else if( ! treap_second.ne_compare( treap_first.lowest(), treap_second.highest() ) ) {
 		return merge_fast( treap_second, treap_first );
-    } else _err_can_not_merge();
+    } else
+		return merge_insert( treap_first, treap_second );
+}
+static treap merge( treap && treap_first, treap && treap_second ) {
+	if( treap_first .empty() ) return treap_second;
+	if( treap_second.empty() ) return treap_first;
+
+	if( ! treap_first.ne_compare( treap_second.lowest(), treap_first.highest() ) ) {
+		return merge_fast( std::move( treap_first ), std::move( treap_second ) );
+    } else if( ! treap_second.ne_compare( treap_first.lowest(), treap_second.highest() ) ) {
+		return merge_fast( std::move( treap_second ), std::move( treap_first ) );
+    } else
+		return merge_insert( treap_first, treap_second );
 }
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-static treap merge_fast( treap const & treap_first, treap const & treap_second ) try {
+static treap merge_fast( treap const & treap_first, treap const & treap_second ) {
     treap treap_merged( treap_first.compare, URNG( treap_first.radom ) );
     treap_merged.root = new node( *treap_first.ncrbegin().elem );
     copy_recursion( treap_merged.root->left , treap_first .root, treap_merged.root );
     copy_recursion( treap_merged.root->right, treap_second.root, treap_merged.root );
-    treap_merged.erase( iterator( treap_merged.root ) );
+    treap_merged.erase_internal( treap_merged.root );
     return treap_merged;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
+static treap merge_fast( treap && treap_first, treap && treap_second ) {
+    treap treap_merged( treap_first.compare, URNG( treap_first.radom ) );
+    treap_merged.root = new node( *treap_first.ncrbegin().elem );
+    treap_merged.root->insert_left ( treap_first .root );
+    treap_merged.root->insert_right( treap_second.root );
+    treap_first .root = nullptr;
+    treap_second.root = nullptr;
+    treap_merged.erase_internal( treap_merged.root );
+    return treap_merged;
+}
+static treap merge_insert( treap treap_merged, treap const & treap_second ) {
+	for( T const & val : treap_second )
+		treap_merged.insert( val );
+	return treap_merged;
+}
+static treap merge_insert( treap treap_merged, treap && treap_second ) {
+	for( T const & val : treap_second )
+		treap_merged.insert( val );
+	treap_second.root = nullptr;
+	return treap_merged;
+}
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
-key_compare      key_comp  () const try { return compare; } catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
-value_compare    value_comp() const try { return compare; } catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
-random_generator random_gen() const try { return radom  ; } catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+key_compare      key_comp  () const { return compare; }
+value_compare    value_comp() const { return compare; }
+random_generator random_gen() const { return radom  ; }
 ///////////////////////////// END ASK METHODS /////////////////////////////
 ///////////////////////////// BEGIN ITERATORS METHODS /////////////////////////////
 iterator begin() {
@@ -400,19 +397,19 @@ const_iterator cbegin() const {
 }
 reverse_iterator rbegin() {
 	if( empty() ) return ncrend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_right() ) _node = _node->right;
 	return reverse_iterator( _node );
 }
 const_reverse_iterator rbegin() const {
 	if( empty() ) return crend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_right() ) _node = _node->right;
 	return const_reverse_iterator( _node );
 }
 const_reverse_iterator crbegin() const {
 	if( empty() ) return crend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_right() ) _node = _node->right;
 	return const_reverse_iterator( _node );
 }
@@ -431,7 +428,7 @@ iterator ncbegin() const {
 }
 reverse_iterator ncrbegin() const {
 	if( empty() ) return ncrend();
-	node const * _node( root );
+	node * _node( root );
 	while( _node->has_right() ) _node = _node->right;
 	return reverse_iterator( _node );
 }
@@ -446,23 +443,23 @@ iterator insert( T const & val ) {
     insert_node( _new_node );
     return iterator( _new_node );
 }
-iterator insert( const_iterator const & it, T const & val ) { insert( val ); }
+iterator insert( const_iterator const & it, T const & val ) { return insert( val ); }
 
 template< typename... Args >
 iterator emplace( Args... _args ) {
-	node * const _new_node( new node( radom, _args... ) );
+	node * const _new_node( new node( node_emplace(), radom, _args... ) );
 	if( empty() ) return iterator( root = _new_node );
     insert_node( _new_node );
     return iterator( _new_node );
 }
 template< typename... Args >
-iterator emplace_hint( const_iterator const & it, Args... _args ) { emplace( _args... ); }
+iterator emplace_hint( const_iterator const & it, Args... _args ) { return emplace( _args... ); }
 
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-void insert_node( node * const _new_node ) {
+void insert_node( node * const _new_node ) noexcept( noexcept( compare( _new_node->key, _new_node->key ) ) ) {
 	node * _node( root );
     while( ! _new_node->has_ancestor() )
-		if( m_compare( _node->key, _new_node->key ) )
+		if( eq_compare( _node->key, _new_node->key ) )
 			if( _node->has_right() ) _node = _node->right;
 			else                     _node->insert_right( _new_node );
 		else
@@ -472,7 +469,7 @@ void insert_node( node * const _new_node ) {
 }
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
-size_type erase( T const & val ) {
+size_type erase( T const & val ) try {
 	size_type count = 0;
     while( true ) {
 		const_iterator it = find( val );
@@ -480,19 +477,29 @@ size_type erase( T const & val ) {
 		++count;
 		erase( it );
     }
+} catch( erase_past_the_end const & ) {
+	throw erase_past_the_end( "size_type", "erase(T const &)" );
+} catch( erase_invalid_iterator const & ) {
+	throw erase_invalid_iterator( "size_type", "erase(T const &)" );
 }
 
-// returns copy of erased element
-T erase( const_iterator it ) try {
-	if( it == cend() ) _err_erase_past_the_end();
-	if( iterator_invalid( it ) ) _err_erase_invalid_iterator();
-	T value_copy = T( *it );
+void erase( const_iterator & it ) {
+	if( it == cend() ) throw erase_past_the_end( "void", "erase(const_iterator &)" );
+	if( iterator_invalid( it ) ) throw erase_invalid_iterator( "void", "erase(const_iterator &)" );
 	erase_internal( it.elem );
-	return value_copy;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
+void erase( const_iterator const & it ) {
+	if( it == cend() ) throw erase_past_the_end( "void", "erase(const_iterator const &)" );
+	if( iterator_invalid( it ) ) throw erase_invalid_iterator( "void", "erase(const_iterator const &)" );
+	erase_internal( it.elem );
+}
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-void erase_internal( node * const _node ) {
-	insert_guard( _node );
+void erase_internal( node * const _node ) noexcept {
+	if( ! ( _node->has_ancestor() || _node->has_left() || _node->has_right() ) ) {
+		delete _node;
+		root = nullptr;
+		return;
+	}
 	while( true ) {
 		if( _node->has_left() )
 			if( _node->has_right() ) rotate_one_of_heirs_with_highest_priority( _node );
@@ -503,59 +510,41 @@ void erase_internal( node * const _node ) {
 			break;
 		}
 	}
-	erase_guard();
 }
-bool iterator_invalid( const_iterator it ) { return iterator_elem_invalid( it.elem ); }
-bool iterator_elem_invalid( node const * elem ) {
-	if( elem == nullptr ) return true;
-	while( elem->has_ancestor() ) elem = elem->ancestor;
-	if( elem != root ) return true;
+bool iterator_invalid( const_iterator const & it ) noexcept {
+	if( it.elem == nullptr ) return true;
+	if( it.is_end && it.elem != root ) return true;
+	if( get_root( it.elem ) != root ) return true;
 	return false;
-}
-void insert_guard( node const * const _node ) {
-	guard = new node( *_node );
-	guard->priority = 1.2;
-	guard->left     = root;
-	if( root != nullptr ) root->ancestor = guard;
-	root = guard;
-}
-void erase_guard() {
-    root = guard->left;
-    if( root != nullptr ) root->ancestor = nullptr;
-    delete guard;
-    guard = nullptr;
 }
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 
-void clear() {
-    node * _node( root );
-    while( _node != nullptr )
-		if( _node->has_left() )       _node = _node->left;
-		else if( _node->has_right() ) _node = _node->right;
-		else {
-			node * _delete = _node;
-			_node = _node->ancestor;
-			delete _delete;
-		}
+void clear() noexcept {
+	delete root;
 	root = nullptr;
 }
 ///////////////////////////// END CHANGING METHODS /////////////////////////////
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 ///////////////////////////// BEGIN COMPARE METHODS /////////////////////////////
-bool equal( T const & first, T const & second ) const { return ( compare( first, second ) == compare( second, first ) ); }
-bool m_compare( T const & first, T const & second ) const try {
+bool equal( T const & first, T const & second ) const noexcept( noexcept( compare( first, second ) ) )
+	{ return ( compare( first, second ) == compare( second, first ) ); }
+bool eq_compare( T const & first, T const & second ) const noexcept( noexcept( compare( first, second ) ) ) {
     if( equal( first, second ) ) return true;
     return compare( first, second );
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
+bool ne_compare( T const & first, T const & second ) const noexcept( noexcept( compare( first, second ) ) ) {
+    if( equal( first, second ) ) return false;
+    return compare( first, second );
+}
 ///////////////////////////// END COMPARE METHODS /////////////////////////////
 ///////////////////////////// BEGIN ROTATION /////////////////////////////
-void rotation( node * const _node ) {
+void rotation( node * const & _node ) noexcept {
     while( _node->has_ancestor() && _node->priority > _node->ancestor->priority )
 		if( _node == _node->ancestor->right ) rotate_right( _node );
 		else                                  rotate_left( _node );
     if( ! _node->has_ancestor() ) root = _node;
 }
-void rotate_left( node * const _node ) {
+void rotate_left( node * const & _node ) noexcept {
 	node * const x         ( _node       );
 	node * const y         ( x->ancestor );
 	node * const y_ancestor( y->ancestor );
@@ -564,6 +553,8 @@ void rotate_left( node * const _node ) {
 	if( y_ancestor != nullptr )
 		if( y_ancestor->left == y )	y_ancestor->left  = x;
 		else						y_ancestor->right = x;
+	else
+		root = x;
     x->ancestor = y_ancestor;
 
     x->right    = y;
@@ -572,7 +563,7 @@ void rotate_left( node * const _node ) {
     y->left = B;
     if( B != nullptr ) B->ancestor = y;
 }
-void rotate_right( node * const _node ) {
+void rotate_right( node * const & _node ) noexcept {
 	node * const y         ( _node       );
 	node * const x         ( y->ancestor );
 	node * const x_ancestor( x->ancestor );
@@ -581,6 +572,8 @@ void rotate_right( node * const _node ) {
 	if( x_ancestor != nullptr )
 		if( x_ancestor->left == x )	x_ancestor->left  = y;
 		else						x_ancestor->right = y;
+	else
+		root = y;
 	y->ancestor = x_ancestor;
 
     y->left     = x;
@@ -589,12 +582,14 @@ void rotate_right( node * const _node ) {
 	x->right = B;
 	if( B != nullptr ) B->ancestor = x;
 }
-void rotate_one_of_heirs_with_highest_priority( node * const _node ) {
+void rotate_one_of_heirs_with_highest_priority( node * const & _node ) noexcept {
 	if( _node->left->priority > _node->right->priority ) rotate_left( _node->left );
 	else                                                 rotate_right( _node->right );
 }
 ///////////////////////////// END ROTATION /////////////////////////////
+private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 ///////////////////////////// BEGIN NODE CLASS /////////////////////////////
+struct node_emplace {};
 class node {
 
 public: //////////////////////////////////////////////////// PUBLIC
@@ -609,66 +604,75 @@ node *  right;
 //////////////// END DECLARATIONS ////////////////
 //////////////// BEGIN CONSTRUCTORS ////////////////
 explicit node( T const & _key, URNG & _radom )
-	try: node(
+	: node(
 		_key,
-		std::generate_canonical<float, 0>( _radom )
+		std::generate_canonical<float, std::numeric_limits<float>::digits>( _radom )
 	) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
-explicit constexpr node( T const & _key, float _priority )
-	try: key( _key ),
-	     priority( _priority ),
-	     ancestor( nullptr ),
-	     left( nullptr ),
-         right( nullptr ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+explicit node( T const & _key, float _priority )
+	: key( _key ),
+	  priority( _priority ),
+	  ancestor( nullptr ),
+	  left( nullptr ),
+      right( nullptr ) {}
 
 template< typename... Args >
-explicit node( URNG & _radom, Args... _args )
-	try: node(
-		std::generate_canonical<float, 0>( _radom ),
+explicit node( node_emplace const &, URNG & _radom, Args... _args )
+	: node(
+		node_emplace(),
+		std::generate_canonical<float, std::numeric_limits<float>::digits>( _radom ),
 		_args...
 	) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
 
 template< typename... Args >
-explicit constexpr node( const float _priority, Args... _args )
-	try: key     ( _args... ),
-	     priority( _priority ),
-	     ancestor( nullptr ),
-	     left    ( nullptr ),
-	     right   ( nullptr ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+explicit node( node_emplace const &, const float _priority, Args... _args )
+	: key     ( _args... ),
+      priority( _priority ),
+	  ancestor( nullptr ),
+	  left    ( nullptr ),
+	  right   ( nullptr ) {}
 
 node( node const & _other )
-	try: key     ( _other.key ),
-         priority( _other.priority ),
-         ancestor( nullptr ),
-         left    ( nullptr ),
-		 right   ( nullptr ) {}
-	catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+	: key     ( _other.key ),
+      priority( _other.priority ),
+      ancestor( nullptr ),
+      left    ( nullptr ),
+	  right   ( nullptr ) {}
 
 node& operator=( node const & ) = delete;
 node( node && )                 = delete;
 node& operator=( node && )      = delete;
 //////////////// END CONSTRUCTORS ////////////////
 //////////////// BEGIN DESTRUCTOR ////////////////
-~node() {
+~node() noexcept {
 	if( has_ancestor() )
 		if( this == ancestor->left ) ancestor->left  = nullptr;
 		else                         ancestor->right = nullptr;
+	if( has_left() )
+		delete left;
+	if( has_right() )
+		delete right;
 }
 //////////////// END DESTRUCTOR ////////////////
 //////////////// BEGIN METHODS ////////////////
-bool has_left    () const { return left   != nullptr; }
-bool has_right   () const { return right  != nullptr; }
-bool has_ancestor() const { return ancestor != nullptr; }
+size_type count() const {
+    return count( left ) + count( right ) + 1;
+}
 
-void insert_left( node * const & _son ) {
+static size_type count( node const * const & heir ) {
+    if( heir == nullptr ) return 0;
+    return heir->count();
+}
+
+bool has_left    () const noexcept { return left   != nullptr; }
+bool has_right   () const noexcept { return right  != nullptr; }
+bool has_ancestor() const noexcept { return ancestor != nullptr; }
+
+void insert_left( node * const & _son ) noexcept {
     left           = _son;
     _son->ancestor = this;
 }
-void insert_right( node * const & _son ) {
+void insert_right( node * const & _son ) noexcept {
     right          = _son;
     _son->ancestor = this;
 }
@@ -676,10 +680,83 @@ void insert_right( node * const & _son ) {
 
 };
 ///////////////////////////// END NODE CLASS /////////////////////////////
+private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
+static node * iterator_increment_internal( node * _node, bool & is_end ) {
+	if( is_end ) throw incrementing_past_the_end( "", "" );
+	if( _node == nullptr ) throw operation_invalid( "", "" );
+    if( _node->has_right() ) {
+		_node = _node->right;
+		while( _node->has_left() ) _node = _node->left;
+		return _node;
+    } else while( true )
+		if( _node->has_ancestor() )
+			if( _node == _node->ancestor->left ) return _node->ancestor;
+			else                                 _node = _node->ancestor;
+		else {
+			is_end = true;
+			return _node;
+		}
+}
+static node * iterator_decrement_internal( node * _node, bool & is_end ) {
+	if( _node == nullptr )
+		if( is_end ) throw decrementing_before_begin( "", "" );
+		else         throw operation_invalid( "", "" );
+	if( is_end ) {
+		is_end = false;
+		while( _node->has_right() ) _node = _node->right;
+		return _node;
+	} else if( _node->has_left() ) {
+		_node = _node->left;
+		while( _node->has_right() ) _node = _node->right;
+		return _node;
+	} else while( true )
+		if( _node->has_ancestor() )
+			if( _node == _node->ancestor->right ) return _node->ancestor;
+			else                                  _node = _node->ancestor;
+		else throw decrementing_before_begin( "", "" );
+}
+static node * reverse_iterator_increment_internal( node * _node, bool & is_end ) {
+	if( is_end ) throw incrementing_past_the_end( "", "" );
+	if( _node == nullptr ) throw operation_invalid( "", "" );
+    if( _node->has_left() ) {
+		_node = _node->left;
+		while( _node->has_right() ) _node = _node->right;
+		return _node;
+	} else while( true )
+		if( _node->has_ancestor() )
+			if( _node == _node->ancestor->right ) return _node->ancestor;
+			else                                  _node = _node->ancestor;
+		else {
+			is_end = true;
+			return _node;
+		}
+}
+static node * reverse_iterator_decrement_internal( node * _node, bool & is_end ) {
+	if( _node == nullptr )
+		if( is_end ) throw decrementing_before_begin( "", "" );
+		else         throw operation_invalid( "", "" );
+	if( is_end ) {
+		is_end = false;
+		while( _node->has_left() ) _node = _node->left;
+		return _node;
+	} else if( _node->has_right() ) {
+		_node = _node->right;
+		while( _node->has_left() ) _node = _node->left;
+		return _node;
+	} else while( true )
+		if( _node->has_ancestor() )
+			if( _node == _node->ancestor->left ) return _node->ancestor;
+			else                                 _node = _node->ancestor;
+		else throw decrementing_before_begin( "", "" );
+}
+static node * get_root( node * _node ) {
+	while( _node->has_ancestor() ) _node = _node->ancestor;
+	return _node;
+}
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 ///////////////////////////// BEGIN ITERATOR CLASS /////////////////////////////
 // default iterator
-class iterator : public std::iterator<std::input_iterator_tag, T> {
+class iterator : public std::iterator<std::input_iterator_tag, const T> {
 
 //////////////// BEGIN DECLARATIONS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
@@ -695,6 +772,9 @@ explicit iterator( node * const _elem_ptr )
 explicit iterator( node * const _elem_ptr, bool _is_end )
 	: elem( _elem_ptr ), is_end( _is_end ) {}
 public: //////////////////////////////////////////////////// PUBLIC
+iterator()
+	: elem( nullptr ), is_end( false ) {}
+
 iterator( iterator const & _other )
 	: elem( _other.elem ), is_end( _other.is_end ) {}
 iterator & operator=( iterator const & _other ) {
@@ -702,84 +782,71 @@ iterator & operator=( iterator const & _other ) {
 	is_end = _other.is_end;
 	return * this;
 }
-iterator( iterator && _other )
+
+iterator( iterator && _other ) noexcept
 	: elem( _other.elem ), is_end( _other.is_end ) {
 		_other.elem = nullptr;
 }
-iterator & operator=( iterator && _other ) {
+iterator & operator=( iterator && _other ) noexcept {
 	elem        = _other.elem;
-	is_end      = _other.is_end;
 	_other.elem = nullptr;
+	is_end      = _other.is_end;
 	return * this;
 }
 //////////////// END CONSTRUCTORS ////////////////
 //////////////// BEGIN OPERATORS ////////////////
-bool operator==( iterator const & _other ) const { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( iterator const & _other ) const { return ! operator==( _other ); }
+bool operator==( iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
+bool operator!=( iterator const & _other ) const noexcept { return ! operator==( _other ); }
+bool operator==( const_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
+bool operator!=( const_iterator const & _other ) const noexcept { return ! operator==( _other ); }
 
-iterator & operator++() {
-	if( elem == nullptr ) _err_incrementing_invalid();
-	if( is_end ) _err_incrementing_past_the_end();
-    node * _node( elem );
-    elem = nullptr;
-    if( _node->has_right() ) {
-		_node = _node->right;
-		while( _node->has_left() ) _node = _node->left;
-		elem = _node;
-    } else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->left ) elem  = _node->ancestor;
-			else                                 _node = _node->ancestor;
-		else {
-			elem   = _node;
-			is_end = true;
-		}
-    return * this;
+iterator & operator++() try {
+	elem = iterator_increment_internal( elem, is_end );
+	return * this;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "iterator &", "iterator::operator++()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "iterator &", "iterator::operator++()" );
 }
-iterator operator++( int ) {
+iterator operator++( int ) try {
 	iterator self( * this );
 	operator++();
 	return self;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "iterator", "iterator::operator++(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "iterator", "iterator::operator++(int)" );
 }
 
-iterator & operator--() {
-	if( elem == nullptr ) _err_decrementing_invalid();
-	node * _node( elem );
-	elem = nullptr;
-	if( is_end ) {
-		is_end = false;
-		while( _node->has_right() ) _node = _node->right;
-		elem = _node;
-	} else if( _node->has_left() ) {
-		_node = _node->left;
-		while( _node->has_right() ) _node = _node->right;
-		elem = _node;
-	} else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->right ) elem  = _node->ancestor;
-			else                                  _node = _node->ancestor;
-		else _err_decrementing_begin();
+iterator & operator--() try {
+	elem = iterator_decrement_internal( elem, is_end );
 	return * this;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "iterator &", "iterator::operator--()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "iterator &", "iterator::operator--()" );
 }
-iterator operator--( int ) {
+iterator operator--( int ) try {
 	iterator self( * this );
 	operator--();
 	return self;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "iterator", "iterator::operator--(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "iterator", "iterator::operator--(int)" );
 }
 
-T const & operator*() const try {
-	if( is_end ) _err_dereference_past_the_end();
-	if( elem == nullptr ) _err_dereference_invalid();
+T const & operator*() const {
+	if( is_end ) throw dereference_past_the_end( "T const &", "iterator::operator*()" );
+	if( elem == nullptr ) throw operation_invalid( "T const &", "iterator::operator*()" );
 	return elem->key;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
-
-operator const_iterator() { return const_iterator( * this ); }
+}
 //////////////// END OPERATORS ////////////////
 
 };
 
 // const default iterator
-class const_iterator : public std::iterator<std::input_iterator_tag, T>  {
+class const_iterator : public std::iterator<std::input_iterator_tag, const T>  {
 
 //////////////// BEGIN DECLARATIONS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
@@ -795,8 +862,12 @@ explicit const_iterator( node * const _elem_ptr )
 explicit const_iterator( node * const _elem_ptr, bool _is_end )
 	: elem( _elem_ptr ), is_end( _is_end ) {}
 public: //////////////////////////////////////////////////// PUBLIC
+const_iterator()
+	: elem( nullptr ), is_end( false ) {}
+
 const_iterator( iterator const & _it )
 	: elem( _it.elem ), is_end( _it.is_end ) {}
+
 const_iterator( const_iterator const & _other )
 	: elem( _other.elem ), is_end( _other.is_end ) {}
 const_iterator & operator=( const_iterator const & _other ) {
@@ -804,304 +875,268 @@ const_iterator & operator=( const_iterator const & _other ) {
 	is_end = _other.is_end;
 	return * this;
 }
-const_iterator( const_iterator && _other )
+
+const_iterator( const_iterator && _other ) noexcept
 	: elem( _other.elem ), is_end( _other.is_end ) {
 		_other.elem = nullptr;
 }
-const_iterator & operator=( const_iterator && _other ) {
+const_iterator & operator=( const_iterator && _other ) noexcept {
 	elem        = _other.elem;
-	is_end      = _other.is_end;
 	_other.elem = nullptr;
+	is_end      = _other.is_end;
 	return * this;
 }
 //////////////// END CONSTRUCTORS ////////////////
 //////////////// BEGIN OPERATORS ////////////////
-bool operator==( const_iterator const & _other ) const { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( const_iterator const & _other ) const { return ! operator==( _other ); }
+bool operator==( const_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
+bool operator!=( const_iterator const & _other ) const noexcept { return ! operator==( _other ); }
 
-const_iterator & operator++() {
-	if( elem == nullptr ) _err_incrementing_invalid();
-	if( is_end ) _err_incrementing_past_the_end();
-    node * _node( elem );
-    elem = nullptr;
-    if( _node->has_right() ) {
-		_node = _node->right;
-		while( _node->has_left() ) _node = _node->left;
-		elem = _node;
-    } else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->left ) elem  = _node->ancestor;
-			else                                 _node = _node->ancestor;
-		else {
-			elem   = _node;
-			is_end = true;
-		}
-    return * this;
+const_iterator & operator++() try {
+	elem = iterator_increment_internal( elem, is_end );
+	return * this;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "const_iterator &", "const_iterator::operator++()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_iterator &", "const_iterator::operator++()" );
 }
-const_iterator operator++( int ) {
+const_iterator operator++( int ) try {
 	const_iterator self( * this );
 	operator++();
 	return self;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "const_iterator", "const_iterator::operator++(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_iterator", "const_iterator::operator++(int)" );
 }
 
-const_iterator & operator--() {
-	if( elem == nullptr ) _err_decrementing_invalid();
-	node * _node( elem );
-	elem = nullptr;
-	if( is_end ) {
-		is_end = false;
-		while( _node->has_right() ) _node = _node->right;
-		elem = _node;
-	} else if( _node->has_left() ) {
-		_node = _node->left;
-		while( _node->has_right() ) _node = _node->right;
-		elem = _node;
-	} else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->right ) elem  = _node->ancestor;
-			else                                  _node = _node->ancestor;
-		else _err_decrementing_begin();
+const_iterator & operator--() try {
+	elem = iterator_decrement_internal( elem, is_end );
 	return * this;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "const_iterator &", "const_iterator::operator--()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_iterator &", "const_iterator::operator--()" );
 }
-const_iterator operator--( int ) {
+const_iterator operator--( int ) try {
 	const_iterator self( * this );
 	operator--();
 	return self;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "const_iterator", "const_iterator::operator--(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_iterator", "const_iterator::operator--(int)" );
 }
 
-T const & operator*() const try {
-	if( is_end ) _err_dereference_past_the_end();
-	if( elem == nullptr ) _err_dereference_invalid();
+T const & operator*() const {
+	if( is_end ) throw dereference_past_the_end( "T const &", "const_iterator::operator*()" );
+	if( elem == nullptr ) throw operation_invalid( "T const &", "const_iterator::operator*()" );
 	return elem->key;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
 //////////////// END OPERATORS ////////////////
 
 };
 
 // reverse iterator
-class reverse_iterator : public std::iterator<std::input_iterator_tag, T> {
+class reverse_iterator : public std::iterator<std::input_iterator_tag, const T> {
 
 //////////////// BEGIN DECLARATIONS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
 friend class treap;
 
-node const * elem;
+node * elem;
 bool         is_end;
 //////////////// END DECLARATIONS ////////////////
 //////////////// BEGIN CONSTRUCTORS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
-explicit reverse_iterator( node const * const _elem_ptr )
+explicit reverse_iterator( node * const _elem_ptr )
 	: elem( _elem_ptr ), is_end( false ) {}
-explicit reverse_iterator( node const * const _elem_ptr, bool _is_end )
+explicit reverse_iterator( node * const _elem_ptr, bool _is_end )
 	: elem( _elem_ptr ), is_end( _is_end ) {}
 public: //////////////////////////////////////////////////// PUBLIC
+reverse_iterator()
+	: elem( nullptr ), is_end( false ) {}
+
 reverse_iterator( reverse_iterator const & _other )
 	: elem( _other.elem ), is_end( _other.is_end ) {}
 reverse_iterator & operator=( reverse_iterator const & _other ) {
 	elem   = _other.elem;
 	is_end = _other.is_end;
 }
-reverse_iterator( reverse_iterator && _other )
+
+reverse_iterator( reverse_iterator && _other ) noexcept
 	: elem( _other.elem ), is_end( _other.is_end ) {
 		_other.elem = nullptr;
 }
-reverse_iterator & operator=( reverse_iterator && _other ) {
+reverse_iterator & operator=( reverse_iterator && _other ) noexcept {
 	elem        = _other.elem;
 	is_end      = _other.is_end;
 	_other.elem = nullptr;
 }
 //////////////// END CONSTRUCTORS ////////////////
 //////////////// BEGIN OPERATORS ////////////////
-bool operator==( reverse_iterator const & _other ) const { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( reverse_iterator const & _other ) const { return ! operator==( _other ); }
+bool operator==( reverse_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
+bool operator!=( reverse_iterator const & _other ) const noexcept { return ! operator==( _other ); }
+bool operator==( const_reverse_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
+bool operator!=( const_reverse_iterator const & _other ) const noexcept { return ! operator==( _other ); }
 
-reverse_iterator & operator++() {
-	if( elem == nullptr ) _err_incrementing_invalid_r();
-	if( is_end ) _err_incrementing_past_the_end();
-	node const * _node( elem );
-	elem = nullptr;
-    if( _node->has_left() ) {
-		_node = _node->left;
-		while( _node->has_right() ) _node = _node->right;
-		elem = _node;
-	} else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->right ) elem  = _node->ancestor;
-			else                                  _node = _node->ancestor;
-		else {
-			elem   = _node;
-			is_end = true;
-		}
+reverse_iterator & operator++() try {
+	elem = reverse_iterator_increment_internal( elem, is_end );
 	return * this;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "reverse_iterator &", "reverse_iterator::operator++()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "reverse_iterator &", "reverse_iterator::operator++()" );
 }
-reverse_iterator operator++( int ) {
+reverse_iterator operator++( int ) try {
 	reverse_iterator self( * this );
 	operator++();
 	return self;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "reverse_iterator", "reverse_iterator::operator++(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "reverse_iterator", "reverse_iterator::operator++(int)" );
 }
 
-reverse_iterator & operator--() {
-	if( elem == nullptr ) _err_decrementing_invalid_r();
-	node const * _node( elem );
-	elem = nullptr;
-	if( is_end ) {
-		is_end = false;
-		while( _node->has_left() ) _node = _node->left;
-		elem = _node;
-	} else if( _node->has_right() ) {
-		_node = _node->right;
-		while( _node->has_left() ) _node = _node->left;
-		elem = _node;
-	} else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->left ) elem  = _node->ancestor;
-			else                                 _node = _node->ancestor;
-		else _err_decrementing_rbegin();
+reverse_iterator & operator--() try {
+	elem = reverse_iterator_decrement_internal( elem, is_end );
     return * this;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "reverse_iterator &", "reverse_iterator::operator--()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "reverse_iterator &", "reverse_iterator::operator--()" );
 }
-reverse_iterator operator--( int ) {
+reverse_iterator operator--( int ) try {
 	reverse_iterator self( * this );
 	operator--();
 	return self;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "reverse_iterator", "reverse_iterator::operator--(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "reverse_iterator", "reverse_iterator::operator--(int)" );
 }
 
-T const & operator*() const try {
-	if( is_end ) _err_dereference_past_the_rend();
-	if( elem == nullptr ) _err_dereference_invalid_r();
+T const & operator*() const {
+	if( is_end ) throw dereference_past_the_end( "T const &", "reverse_iterator::operator*()" );
+	if( elem == nullptr ) throw operation_invalid( "T const &", "reverse_iterator::operator*()" );
 	return elem->key;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
 
-operator const_reverse_iterator() { return const_reverse_iterator( * this ); }
+iterator base() const {
+	if( is_end && elem == nullptr ) throw decrementing_before_begin( "iterator", "reverse_iterator::base()" );
+	bool temp_is_end = is_end;
+	try {
+		return iterator( reverse_iterator_decrement_internal( elem, temp_is_end ), temp_is_end );
+    } catch( decrementing_before_begin const & ) {
+		return iterator( get_root( elem ), true );
+    } catch( operation_invalid const & ) {
+		throw operation_invalid( "iterator", "reverse_iterator::base()" );
+    }
+}
 //////////////// END OPERATORS ////////////////
 
 };
 
 // const reverse iterator
-class const_reverse_iterator : public std::iterator<std::input_iterator_tag, T> {
+class const_reverse_iterator : public std::iterator<std::input_iterator_tag, const T> {
 
 //////////////// BEGIN DECLARATIONS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
 friend class treap;
 
-node const * elem;
+node * elem;
 bool         is_end;
 //////////////// END DECLARATIONS ////////////////
 //////////////// BEGIN CONSTRUCTORS ////////////////
 private: //////////////////////////////////////////////////// PRIVATE
-explicit const_reverse_iterator( node const * const _elem_ptr )
+explicit const_reverse_iterator( node * const _elem_ptr )
 	: elem( _elem_ptr ), is_end( false ) {}
-explicit const_reverse_iterator( node const * const _elem_ptr, bool _is_end )
+explicit const_reverse_iterator( node * const _elem_ptr, bool _is_end )
 	: elem( _elem_ptr ), is_end( _is_end ) {}
 public: //////////////////////////////////////////////////// PUBLIC
+const_reverse_iterator()
+	: elem( nullptr ), is_end( false ) {}
+
 const_reverse_iterator( reverse_iterator const & _it )
 	: elem( _it.elem ), is_end( _it.is_end ) {}
+
 const_reverse_iterator( const_reverse_iterator const & _other )
 	: elem( _other.elem ), is_end( _other.is_end ) {}
 const_reverse_iterator & operator=( const_reverse_iterator const & _other ) {
 	elem   = _other.elem;
 	is_end = _other.is_end;
 }
-const_reverse_iterator( const_reverse_iterator && _other )
+
+const_reverse_iterator( const_reverse_iterator && _other ) noexcept
 	: elem( _other.elem ), is_end( _other.is_end ) {
 		_other.elem = nullptr;
 }
-const_reverse_iterator & operator=( const_reverse_iterator && _other ) {
+const_reverse_iterator & operator=( const_reverse_iterator && _other ) noexcept {
 	elem        = _other.elem;
 	is_end      = _other.is_end;
 	_other.elem = nullptr;
 }
 //////////////// END CONSTRUCTORS ////////////////
 //////////////// BEGIN OPERATORS ////////////////
-bool operator==( const_reverse_iterator const & _other ) const { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( const_reverse_iterator const & _other ) const { return ! operator==( _other ); }
+bool operator==( const_reverse_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
+bool operator!=( const_reverse_iterator const & _other ) const noexcept { return ! operator==( _other ); }
 
-const_reverse_iterator & operator++() {
-	if( elem == nullptr ) _err_incrementing_invalid_r();
-	if( is_end ) _err_incrementing_past_the_end();
-	node const * _node( elem );
-	elem = nullptr;
-    if( _node->has_left() ) {
-		_node = _node->left;
-		while( _node->has_right() ) _node = _node->right;
-		elem = _node;
-	} else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->right ) elem  = _node->ancestor;
-			else                                  _node = _node->ancestor;
-		else {
-			elem   = _node;
-			is_end = true;
-		}
+const_reverse_iterator & operator++() try {
+	elem = reverse_iterator_increment_internal( elem, is_end );
 	return * this;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "const_reverse_iterator &", "const_reverse_iterator::operator++()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_reverse_iterator &", "const_reverse_iterator::operator++()" );
 }
-const_reverse_iterator operator++( int ) {
+const_reverse_iterator operator++( int ) try {
 	const_reverse_iterator self( * this );
 	operator++();
 	return self;
+} catch( incrementing_past_the_end const & ) {
+	throw incrementing_past_the_end( "const_reverse_iterator", "const_reverse_iterator::operator++(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_reverse_iterator", "const_reverse_iterator::operator++(int)" );
 }
 
-const_reverse_iterator & operator--() {
-	if( elem == nullptr ) _err_decrementing_invalid_r();
-	node const * _node( elem );
-	elem = nullptr;
-	if( is_end ) {
-		is_end = false;
-		while( _node->has_left() ) _node = _node->left;
-		elem = _node;
-	} else if( _node->has_right() ) {
-		_node = _node->right;
-		while( _node->has_left() ) _node = _node->left;
-		elem = _node;
-	} else while( elem == nullptr )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->left ) elem  = _node->ancestor;
-			else                                 _node = _node->ancestor;
-		else _err_decrementing_rbegin();
+const_reverse_iterator & operator--() try {
+	elem = reverse_iterator_decrement_internal( elem, is_end );
     return * this;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "const_reverse_iterator &", "const_reverse_iterator::operator--()" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_reverse_iterator &", "const_reverse_iterator::operator--()" );
 }
-const_reverse_iterator operator--( int ) {
+const_reverse_iterator operator--( int ) try {
 	const_reverse_iterator self( * this );
 	operator--();
 	return self;
+} catch( decrementing_before_begin const & ) {
+	throw decrementing_before_begin( "const_reverse_iterator", "const_reverse_iterator::operator--(int)" );
+} catch( operation_invalid const & ) {
+	throw operation_invalid( "const_reverse_iterator", "const_reverse_iterator::operator--(int)" );
 }
 
-T const & operator*() const try {
-	if( is_end ) _err_dereference_past_the_rend();
-	if( elem == nullptr ) _err_dereference_invalid_r();
+T const & operator*() const {
+	if( is_end ) throw dereference_past_the_end( "T const &", "const_reverse_iterator::operator*()" );
+	if( elem == nullptr ) throw operation_invalid( "T const &", "const_reverse_iterator::operator*()" );
 	return elem->key;
-} catch( std::exception & e ) { handle_exception( e ); } catch(...) { handle_exception(); }
+}
+
+const_iterator base() const {
+	if( is_end && elem == nullptr ) throw decrementing_before_begin( "const_iterator", "const_reverse_iterator::base()" );
+	bool temp_is_end = is_end;
+	try {
+		return const_iterator( reverse_iterator_decrement_internal( elem, temp_is_end ), temp_is_end );
+    } catch( decrementing_before_begin const & ) {
+		return const_iterator( get_root( elem ), true );
+    } catch( operation_invalid const & ) {
+		throw operation_invalid( "const_iterator", "const_reverse_iterator::base()" );
+    }
+}
 //////////////// END OPERATORS ////////////////
 
 };
 ///////////////////////////// END ITERATOR CLASS /////////////////////////////
-
-void wypisz_spacje( int ile ) const {
-    while( ile-- ) std::cout << "  ";
-}
-
-void wypisz_node( node const * const _node, int poziom, std::string d ) const {
-	if( _node == nullptr ) return;
-
-	wypisz_spacje( poziom );
-
-	std::cout << d << _node->key << " " << _node->priority;
-	if( _node->has_ancestor() ) std::cout << " " << _node->ancestor->key;
-	else std::cout << " nptr";
-	if( _node->has_left() ) std::cout << " " << _node->left->key;
-	else std::cout << " nptr";
-	if( _node->has_right() ) std::cout << " " << _node->right->key;
-	else std::cout << " nptr";
-	std::cout << std::endl;
-
-	wypisz_node( _node->left, poziom+1, "l " );
-	wypisz_node( _node->right, poziom+1, "p " );
-}
-
-void wypisz() const {
-	if( empty() ) std::cout << "empty" << std::endl;
-	wypisz_node( root, 0, "" );
-	std::cout << std::endl;
-}
 
 };
 
