@@ -54,12 +54,8 @@ struct A {
 	bool operator<( A const & _other ) const {
 		return ( sd < _other.sd );
 	}
-
-    friend std::ostream& operator<<( std::ostream &, A const & );
 };
-std::ostream& operator<<( std::ostream & wyjscie, A const & a ) {
-	return wyjscie << a.b.sd << " " << a.c.sd << " " << a.sd;
-}
+
 struct cmp_t {
     bool operator() ( treap<int> const & a, treap<int> const & b ) const {
 
@@ -1210,6 +1206,18 @@ TEST( TREAP, REVERSE_ITERATOR ) {
 	dout << __LINE__ << std::endl;
 
 	EXPECT_THROW( --abbb.rend(), std::runtime_error );
+
+	dout << __LINE__ << std::endl;
+}
+
+TEST( SOME, MORE ) {
+	dout << __LINE__ << std::endl;
+
+	treap<int> abba{2, 5, 3, 7};
+
+	abba = abba;
+
+	EXPECT_EQ( 4, abba.size() );
 
 	dout << __LINE__ << std::endl;
 }

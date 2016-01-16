@@ -12,14 +12,15 @@
 #ifndef __JAKUB_NOWAK_TREAP_H
 #define __JAKUB_NOWAK_TREAP_H
 
-#include <random>
-#include <utility>
-#include <functional>
-#include <initializer_list>
-#include <iterator>
-#include <algorithm>
-#include <limits>
-#include <stdexcept>
+#include <random>           // std::default_random_engine
+#include <utility>          // std::pair, std::move
+#include <functional>       // std::less
+#include <initializer_list> // std::initializer_list
+#include <iterator>         // std::iterator
+#include <limits>           // std::numeric_limits<float>::digits
+#include <stdexcept>        // std::exception
+#include <cstdlib>          // std::size_t
+#include <string>           // std::string
 
 // treap<T, CompareType, URNG>
 template< class T, class CompareType = std::less<T>, class URNG = std::default_random_engine >
@@ -33,7 +34,7 @@ typedef CompareType key_compare     ;
 typedef CompareType value_compare   ;
 typedef URNG        random_generator;
 
-typedef unsigned long long size_type;
+typedef std::size_t size_type;
 ///////////////////////////// END TYPEDEFS /////////////////////////////
 
 ///////////////////////////// BEGIN DECLARATIONS /////////////////////////////
@@ -55,7 +56,7 @@ struct iterator_error;
 		struct operation_invalid;
 		struct erase_invalid_iterator;
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-class  node;
+class  node        ;
 struct node_emplace;
 
 node *      root   ;
@@ -112,6 +113,10 @@ struct erase_invalid_iterator: invalid_iterator {
 	explicit erase_invalid_iterator( std::string const & return_type, std::string const & function_name )
 		: invalid_iterator( return_type, function_name, "Attempt to erase invalid iterator" ) {}
 };
+struct size_type_overflow: std::overflow_error {
+	explicit size_type_overflow( std::string const & return_type, std::string const & function_name )
+		: std::overflow_error( get_err_str( return_type, function_name, "size exceed max value of size_type: " + std::numeric_limits<size_type>::max() ) ) {}
+};
 ///////////////////////////// END ERRORS AND WARNINGS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 ///////////////////////////// BEGIN CONSTRUCTORS /////////////////////////////
@@ -165,7 +170,8 @@ treap( treap && _other )
 	)
 	: root   ( std::move( _other.root ) ),
 	  compare( std::move( _other.compare ) ),
-	  radom  ( std::move( _other.radom ) ) {
+	  radom  ( std::move( _other.radom ) )
+	  {
 		_other.root = nullptr;
 }
 
@@ -174,15 +180,15 @@ treap & operator=( treap && _other )
 	noexcept(
 		noexcept( CompareType::operator=( std::move( _other.compare ) ) ) &&
 		noexcept( URNG::operator=( std::move( _other.radom ) ) )
-	) {
-	if( this == &_other ) return *this;
-	std::cout << "foo" << std::endl;
-	clear();
-	root        = std::move( _other.root );
-	compare     = std::move( _other.compare );
-	radom       = std::move( _other.radom );
-	_other.root = nullptr;
-	return * this;
+	)
+	{
+		if( this == &_other ) return *this;
+		clear();
+		root        = std::move( _other.root );
+		compare     = std::move( _other.compare );
+		radom       = std::move( _other.radom );
+		_other.root = nullptr;
+		return * this;
 }
 
 // destructor
@@ -202,7 +208,7 @@ public: ////////////////////////////////////////////////////////////////////////
 ///////////////////////////// BEGIN ASK METHODS /////////////////////////////
 bool empty() const noexcept { return root == nullptr; }
 
-size_type size() const noexcept {
+size_type size() const {
 	if( empty() ) return 0;
 	return root->count();
 }
@@ -655,7 +661,14 @@ node& operator=( node && )      = delete;
 //////////////// END DESTRUCTOR ////////////////
 //////////////// BEGIN METHODS ////////////////
 size_type count() const {
-    return count( left ) + count( right ) + 1;
+	size_type l = count( left );
+	size_type r = count( right );
+	size_type sum = l + r;
+	if( sum < l && sum < r )
+		throw size_type_overflow( "size_type", "size()" );
+	if( sum == std::numeric_limits<size_type>::max() )
+		throw size_type_overflow( "size_type", "size()" );
+    return sum + 1;
 }
 
 static size_type count( node const * const & heir ) {
