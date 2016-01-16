@@ -13,7 +13,6 @@
 #define __JAKUB_NOWAK_TREAP_H
 
 #include <random>
-#include <iostream>
 #include <utility>
 #include <functional>
 #include <initializer_list>
