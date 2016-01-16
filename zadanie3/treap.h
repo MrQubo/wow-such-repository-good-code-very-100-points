@@ -66,7 +66,13 @@ URNG        radom  ;
 ///////////////////////////// BEGIN ERRORS AND WARNINGS /////////////////////////////
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
 static std::string get_err_str( std::string const & return_type, std::string const & function_name, std::string const & message ) {
-	return "In function '" + return_type + " treap<T, CompareType, URNG>::" + function_name + "':\n    " + message + "\n";
+	return "In function '" +
+			return_type +
+			" treap<T, CompareType, URNG>::" +
+			function_name +
+			"':\n    " +
+			message +
+			"\n";
 }
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 struct empty_treap: std::runtime_error {
@@ -115,7 +121,11 @@ struct erase_invalid_iterator: invalid_iterator {
 };
 struct size_type_overflow: std::overflow_error {
 	explicit size_type_overflow( std::string const & return_type, std::string const & function_name )
-		: std::overflow_error( get_err_str( return_type, function_name, "size exceed max value of size_type: " + std::numeric_limits<size_type>::max() ) ) {}
+		: std::overflow_error( get_err_str(
+			return_type,
+			function_name,
+			"size exceed max value of size_type: " + std::numeric_limits<size_type>::max()
+		  ) ) {}
 };
 ///////////////////////////// END ERRORS AND WARNINGS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
@@ -142,13 +152,15 @@ explicit treap( CompareType const & _compare, URNG && _radom )
 
 // main constructor
 explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare, URNG && _radom )
-	: root( nullptr ), compare( _compare ), radom( std::move( _radom ) ) {
+	: root( nullptr ), compare( _compare ), radom( std::move( _radom ) )
+	{
 		for( T const & val : _il ) insert( val );
 }
 
 // copy contructor
 treap( treap const & _other )
-	: root( nullptr ), compare( _other.compare ), radom( _other.radom ) {
+	: root( nullptr ), compare( _other.compare ), radom( _other.radom )
+	{
 		copy( _other );
 }
 
@@ -171,7 +183,7 @@ treap( treap && _other )
 	: root   ( std::move( _other.root ) ),
 	  compare( std::move( _other.compare ) ),
 	  radom  ( std::move( _other.radom ) )
-	  {
+	{
 		_other.root = nullptr;
 }
 
@@ -195,7 +207,9 @@ treap & operator=( treap && _other )
 ~treap() noexcept { clear(); }
 
 private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-void copy( treap const & _other ) { copy_recursion( root, _other.root ); }
+void copy( treap const & _other ) {
+	copy_recursion( root, _other.root );
+}
 static void copy_recursion( node * & _node, node const * const _other_node, node * const _node_ancestor = nullptr ) {
 	if( _other_node == nullptr ) return;
 	_node			= new node( * _other_node );
@@ -206,7 +220,9 @@ static void copy_recursion( node * & _node, node const * const _other_node, node
 ///////////////////////////// END CONSTRUCTORS /////////////////////////////
 public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
 ///////////////////////////// BEGIN ASK METHODS /////////////////////////////
-bool empty() const noexcept { return root == nullptr; }
+bool empty() const noexcept {
+	return root == nullptr;
+}
 
 size_type size() const {
 	if( empty() ) return 0;
@@ -222,7 +238,9 @@ T highest() const {
     return * crbegin();
 }
 
-bool contains( T const & val ) const { return find( val ) != cend(); }
+bool contains( T const & val ) const {
+	return find( val ) != cend();
+}
 
 iterator       find( T const & val )       { return find_internal( val ); }
 const_iterator find( T const & val ) const { return find_internal( val ); }
@@ -488,11 +506,6 @@ size_type erase( T const & val ) try {
 	throw erase_invalid_iterator( "size_type", "erase(T const &)" );
 }
 
-void erase( const_iterator & it ) {
-	if( it == cend() ) throw erase_past_the_end( "void", "erase(const_iterator &)" );
-	if( iterator_invalid( it ) ) throw erase_invalid_iterator( "void", "erase(const_iterator &)" );
-	erase_internal( it.elem );
-}
 void erase( const_iterator const & it ) {
 	if( it == cend() ) throw erase_past_the_end( "void", "erase(const_iterator const &)" );
 	if( iterator_invalid( it ) ) throw erase_invalid_iterator( "void", "erase(const_iterator const &)" );
@@ -612,7 +625,7 @@ explicit node( T const & _key, URNG & _radom )
 	: node(
 		_key,
 		std::generate_canonical<float, std::numeric_limits<float>::digits>( _radom )
-	) {}
+	  ) {}
 
 explicit node( T const & _key, float _priority )
 	: key( _key ),
@@ -627,7 +640,7 @@ explicit node( node_emplace const &, URNG & _radom, Args... _args )
 		node_emplace(),
 		std::generate_canonical<float, std::numeric_limits<float>::digits>( _radom ),
 		_args...
-	) {}
+	  ) {}
 
 template< typename... Args >
 explicit node( node_emplace const &, const float _priority, Args... _args )
@@ -676,8 +689,8 @@ static size_type count( node const * const & heir ) {
     return heir->count();
 }
 
-bool has_left    () const noexcept { return left   != nullptr; }
-bool has_right   () const noexcept { return right  != nullptr; }
+bool has_left    () const noexcept { return left     != nullptr; }
+bool has_right   () const noexcept { return right    != nullptr; }
 bool has_ancestor() const noexcept { return ancestor != nullptr; }
 
 void insert_left( node * const & _son ) noexcept {
@@ -796,7 +809,8 @@ iterator & operator=( iterator const & _other ) {
 }
 
 iterator( iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end ) {
+	: elem( _other.elem ), is_end( _other.is_end )
+	{
 		_other.elem = nullptr;
 }
 iterator & operator=( iterator && _other ) noexcept {
@@ -889,7 +903,8 @@ const_iterator & operator=( const_iterator const & _other ) {
 }
 
 const_iterator( const_iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end ) {
+	: elem( _other.elem ), is_end( _other.is_end )
+	{
 		_other.elem = nullptr;
 }
 const_iterator & operator=( const_iterator && _other ) noexcept {
@@ -976,7 +991,8 @@ reverse_iterator & operator=( reverse_iterator const & _other ) {
 }
 
 reverse_iterator( reverse_iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end ) {
+	: elem( _other.elem ), is_end( _other.is_end )
+	{
 		_other.elem = nullptr;
 }
 reverse_iterator & operator=( reverse_iterator && _other ) noexcept {
@@ -1079,7 +1095,8 @@ const_reverse_iterator & operator=( const_reverse_iterator const & _other ) {
 }
 
 const_reverse_iterator( const_reverse_iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end ) {
+	: elem( _other.elem ), is_end( _other.is_end )
+	{
 		_other.elem = nullptr;
 }
 const_reverse_iterator & operator=( const_reverse_iterator && _other ) noexcept {
