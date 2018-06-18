@@ -1,1172 +1,1004 @@
 /*!
+ * =====================================================================================
  *
- * Jakub Nowak
+ *       Filename:  tree.h
  *
- * Zadanie 3: Drzepiec
+ *       Compiler:  g++
+ *    C++ Version:  >= 20170000
  *
- * Hint in insert and emplace_hint must be element that should FOLLOW inserting element.
+ *         Author:  Jakub Nowak <jakub.jakub.nowak@gmail.com>
  *
+ * =====================================================================================
  */
 
+
+#if __INCLUDE_LEVEL__ == 0
 #pragma once
-#ifndef __JAKUB_NOWAK_TREAP_H
-#define __JAKUB_NOWAK_TREAP_H
+#endif
 
-#include <random>           // std::default_random_engine
-#include <utility>          // std::pair, std::move
-#include <functional>       // std::less
-#include <initializer_list> // std::initializer_list
-#include <iterator>         // std::iterator
-#include <limits>           // std::numeric_limits<float>::digits
-#include <stdexcept>        // std::exception
-#include <cstdlib>          // std::size_t
-#include <string>           // std::string
 
-// treap<T, CompareType, URNG>
-template< class T, class CompareType = std::less<T>, class URNG = std::default_random_engine >
-class treap {
+#include <iterator>         // std::bidirectional_iterator_tag
+#include <memory>           // std::allocator_traits
+#include <type_traits>      // std::is_same_v
+#include <utility>          // std::forward, std::make_pair, std::move, std::move_if_noexcept, std::pair
 
-///////////////////////////// BEGIN TYPEDEFS /////////////////////////////
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-typedef T           key_type        ;
-typedef T           value_type      ;
-typedef CompareType key_compare     ;
-typedef CompareType value_compare   ;
-typedef URNG        random_generator;
 
-typedef std::size_t size_type;
-///////////////////////////// END TYPEDEFS /////////////////////////////
 
-///////////////////////////// BEGIN DECLARATIONS /////////////////////////////
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-class               iterator;
-class         const_iterator;
-class       reverse_iterator;
-class const_reverse_iterator;
+/*
+ * The invariants
+ * header.left   === leftmost  node in the tree
+ * header.right  === rightmost node in the tree
+ * header.parent === tree root
+ * priority of the parent is less than or equal to both children priorities
+ * key of the left child is less than or equal to parent key
+ * key of the right child is greater than or equal to parent key
+ */
 
-struct empty_treap;
-struct iterator_error;
-	struct past_the_end_error;
-		struct dereference_past_the_end;
-		struct incrementing_past_the_end;
-		struct erase_past_the_end;
-	struct before_begin_error;
-		struct decrementing_before_begin;
-	struct invalid_iterator;
-		struct operation_invalid;
-		struct erase_invalid_iterator;
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-class  node        ;
-struct node_emplace;
 
-node *      root   ;
-CompareType compare;
-URNG        radom  ;
-///////////////////////////// END DECLARATIONS /////////////////////////////
-///////////////////////////// BEGIN ERRORS AND WARNINGS /////////////////////////////
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-static std::string get_err_str( std::string const & return_type, std::string const & function_name, std::string const & message ) {
-	return "In function '" +
-			return_type +
-			" treap<T, CompareType, URNG>::" +
-			function_name +
-			"':\n    " +
-			message +
-			"\n";
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-struct empty_treap: std::runtime_error {
-	explicit empty_treap( std::string const & return_type, std::string const & function_name )
-		: std::runtime_error( get_err_str( return_type, function_name, "Treap is empty" ) ) {}
-};
-struct iterator_error: std::runtime_error {
-	explicit iterator_error( std::string const & return_type, std::string const & function_name, std::string const & message )
-		: std::runtime_error( get_err_str( return_type, function_name, message ) ) {}
-};
-struct past_the_end_error: iterator_error {
-	explicit past_the_end_error( std::string const & return_type, std::string const & function_name, std::string const & message )
-		: iterator_error( return_type, function_name, message ) {}
-};
-struct dereference_past_the_end: past_the_end_error {
-	explicit dereference_past_the_end( std::string const & return_type, std::string const & function_name )
-		: past_the_end_error( return_type, function_name, "Attempt to dereference past-the-end iterator" ) {}
-};
-struct incrementing_past_the_end: past_the_end_error {
-	explicit incrementing_past_the_end( std::string const & return_type, std::string const & function_name )
-		: past_the_end_error( return_type, function_name, "Attempt to increment past-the-end iterator" ) {}
-};
-struct erase_past_the_end: past_the_end_error {
-	explicit erase_past_the_end( std::string const & return_type, std::string const & function_name )
-		: past_the_end_error( return_type, function_name, "Attempt to erase past-the-end iterator" ) {}
-};
-struct before_begin_error: iterator_error {
-	explicit before_begin_error( std::string const & return_type, std::string const & function_name, std::string const & message )
-		: iterator_error( return_type, function_name, message ) {}
-};
-struct decrementing_before_begin: before_begin_error {
-	explicit decrementing_before_begin( std::string const & return_type, std::string const & function_name )
-		: before_begin_error( return_type, function_name, "Attempt to decrement iterator pointing to begin" ) {}
-};
-struct invalid_iterator: iterator_error {
-	explicit invalid_iterator( std::string const & return_type, std::string const & function_name, std::string const & message )
-		: iterator_error( return_type, function_name, message ) {}
-};
-struct operation_invalid: invalid_iterator {
-	explicit operation_invalid( std::string const & return_type, std::string const & function_name )
-		: invalid_iterator( return_type, function_name, "Invalid use of invalid iterator" ) {}
-};
-struct erase_invalid_iterator: invalid_iterator {
-	explicit erase_invalid_iterator( std::string const & return_type, std::string const & function_name )
-		: invalid_iterator( return_type, function_name, "Attempt to erase invalid iterator" ) {}
-};
-struct size_type_overflow: std::overflow_error {
-	explicit size_type_overflow( std::string const & return_type, std::string const & function_name )
-		: std::overflow_error( get_err_str(
-			return_type,
-			function_name,
-			"size exceed max value of size_type: " + std::numeric_limits<size_type>::max()
-		  ) ) {}
-};
-///////////////////////////// END ERRORS AND WARNINGS /////////////////////////////
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-///////////////////////////// BEGIN CONSTRUCTORS /////////////////////////////
-treap()
-	: treap( {} ) {}
-explicit treap( std::initializer_list<T> const & _il )
-	: treap( _il, CompareType(), URNG( 720553160 ) ) {}
 
-explicit treap( CompareType const & _compare )
-	: treap( {}, _compare, URNG( 755858114 ) ) {}
+/**
+ * @pre Allocator::value_type has to be the same type as Key
+ */
+template <class Key, class Value, class Priority, class KeyOfValue, class KeyCompareType, class RandomPriorityGenerator, class Allocator>
+class tree {
+static_assert(
+    std::is_same_v<Key, typename std::allocator_traits<Allocator>::value_type>,
+    "treap must have the same value_type as its allocator"
+);
 
-explicit treap( URNG && _radom )
-	: treap( {}, CompareType(), std::move( _radom ) ) {}
+///////////////////////////////////////////////// BEGIN DEFINITIONS /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+using key_type         = Key;
+using value_type       = Value;
+using priority_type    = Priority;
+using key_compare      = KeyCompareType;
+using random_generator = RandomPriorityGenerator;
+using allocator_type   = Allocator;
+using size_type        = typename std::allocator_traits<allocator_type>::size_type;
+using difference_type  = typename std::allocator_traits<allocator_type>::difference_type;
 
-explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare )
-	: treap( _il, _compare, URNG( 20553730 ) ) {}
+using reference       = value_type&;
+using const_reference = const value_type&;
+using pointer         = typename std::allocator_traits<allocator_type>::pointer;
+using const_pointer   = typename std::allocator_traits<allocator_type>::const_pointer;
 
-explicit treap( std::initializer_list<T> const & _il, URNG && _radom )
-	: treap( _il, CompareType(), std::move( _radom ) ) {}
+class const_iterator;
+using iterator = const_iterator;
 
-explicit treap( CompareType const & _compare, URNG && _radom )
-	: treap( {}, _compare, std::move( _radom ) ) {}
+// explicit tree(const key_compare&, const random_generator&, const allocator_type&);
+//
+// ~tree();
+//
+// tree& operator= (const tree&);
+// tree& operator= (tree&&);
+//
+// bool empty() const;
+// size_type size() const;
+// size_type max_size() const;
+//
+// void clear();
+//
+// // insert, emplace
+// iterator insert_equal(const value_type&);
+// iterator insert_equal(value_type&&);
+// iterator insert_equal(const_iterator hint, const value_type&);
+// iterator insert_equal(const_iterator hint, value_type&&);
+//
+// iterator insert_unique(const value_type&);
+// iterator insert_unique(value_type&&);
+// iterator insert_unique(const_iterator hint, const value_type&);
+// iterator insert_unique(const_iterator hint, value_type&&);
+//
+// template<class... Args> iterator emplace_equal(Args&&...);
+// template<class... Args> iterator emplace_equal_hint(const_iterator hint, Args&&...);
+//
+// template<class... Args> iterator emplace_unique(Args&&...);
+// template<class... Args> iterator emplace_unique_hint(const_iterator hint, Args&&...);
+//
+// // TODO: erase
+// iterator erase(const_iterator);
+// iterator erase(const_iterator first, const_iterator last);
+// size_type erase(const key_type&);
+//
+// void swap(tree&);
+//
+// // TODO: count
+//                   size_type count(const key_type&) const;
+// template<class K> size_type count(const K&       ) const;
+//
+// // find
+                        // iterator find(const key_type&)      ;
+                  // const_iterator find(const key_type&) const;
+// template<class K>       iterator find(const K&       )      ;
+// template<class K> const_iterator find(const K&       ) const;
+//
+// // lower_bound
+                        // iterator lower_bound(const key_type&)      ;
+                  // const_iterator lower_bound(const key_type&) const;
+// template<class K>       iterator lower_bound(const K&       )      ;
+// template<class K> const_iterator lower_bound(const K&       ) const;
+//
+// // upper_bound
+                        // iterator upper_bound(const key_type&)      ;
+                  // const_iterator upper_bound(const key_type&) const;
+// template<class K>       iterator upper_bound(const K&       )      ;
+// template<class K> const_iterator upper_bound(const K&       ) const;
+//
+// // equal_range
+                  // std::pair<      iterator,       iterator> equal_range(const key_type&)      ;
+                  // std::pair<const_iterator, const_iterator> equal_range(const key_type&) const;
+// template<class K> std::pair<      iterator,       iterator> equal_range(const K&       )      ;
+// template<class K> std::pair<const_iterator, const_iterator> equal_range(const K&       ) const;
+//
+// key_compare      key_comp     () const;
+// random_generator random_gen   () const;
+// allocator_type   get_allocator() const;
 
-// main constructor
-explicit treap( std::initializer_list<T> const & _il, CompareType const & _compare, URNG && _radom )
-	: root( nullptr ), compare( _compare ), radom( std::move( _radom ) )
-	{
-		for( T const & val : _il ) insert( val );
-}
+// // TODO: comparators
+// bool operator== (const tree&);
+// bool operator!= (const tree&);
+// bool operator<  (const tree&);
+// bool operator<= (const tree&);
+// bool operator>  (const tree&);
+// bool operator>= (const tree&);
 
-// copy contructor
-treap( treap const & _other )
-	: root( nullptr ), compare( _other.compare ), radom( _other.radom )
-	{
-		copy( _other );
-}
+protected: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PROTECTED
+class tree_node_base;
+class tree_node;
 
-// copy assigment
-treap & operator=( treap const & _other ) {
-	if( this == &_other ) return *this;
-	clear();
-	compare = CompareType( _other.compare );
-	radom   = URNG( _other.radom );
-	copy( _other );
-	return * this;
-}
+using base_allocator = typename allocator_type::template rebind<tree_node_base>::other;
+using link_allocator = typename allocator_type::template rebind<tree_node>::other;
 
-// move contructor
-treap( treap && _other )
-	noexcept(
-		noexcept( CompareType( std::move( _other.compare ) ) ) &&
-		noexcept( URNG( std::move( _other.radom ) ) )
-	)
-	: root   ( std::move( _other.root ) ),
-	  compare( std::move( _other.compare ) ),
-	  radom  ( std::move( _other.radom ) )
-	{
-		_other.root = nullptr;
+using base_ptr = typename std::allocator_traits<base_allocator>::pointer;
+using link_ptr = typename std::allocator_traits<link_allocator>::pointer;
+///////////////////////////////////////////////// END DEFINITIONS /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN VARIABLES /////////////////////////////////////////////////
+private: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PRIVATE
+// header invariant:
+// header.left == lowest value (begin)
+// header.right == highest value (rbegin)
+// header.parent == tree root
+tree_node_base   header;
+key_compare      _key_compare;
+random_generator _random_generator;
+link_allocator   _link_allocator;
+size_type        node_count;
+///////////////////////////////////////////////// END VARIABLES /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN CONSTRUCTORS /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+explicit tree(
+    const key_compare&      __key_compare,
+    const random_generator& __random_generator,
+    const allocator_type&   __allocator
+)
+    : header            (nullptr, &header, &header),
+      _key_compare      (__key_compare),
+      _random_generator (__random_generator),
+      _link_allocator   (__allocator),
+      node_count        (0)
+{ }
+
+~tree()
+{
+    clear();
 }
 
-// move assigment
-treap & operator=( treap && _other )
-	noexcept(
-		noexcept( CompareType::operator=( std::move( _other.compare ) ) ) &&
-		noexcept( URNG::operator=( std::move( _other.radom ) ) )
-	)
-	{
-		if( this == &_other ) return *this;
-		clear();
-		root        = std::move( _other.root );
-		compare     = std::move( _other.compare );
-		radom       = std::move( _other.radom );
-		_other.root = nullptr;
-		return * this;
+tree(const tree& other)
+    : header            (nullptr, &header, &header),
+      _key_compare      (other._key_compare),
+      _random_generator (other._random_generator),
+      _link_allocator   (other._link_allocator),
+      node_count        (other.node_count)
+{
+    copy_tree(other);
 }
 
-// destructor
-~treap() noexcept { clear(); }
-
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-void copy( treap const & _other ) {
-	copy_recursion( root, _other.root );
-}
-static void copy_recursion( node * & _node, node const * const _other_node, node * const _node_ancestor = nullptr ) {
-	if( _other_node == nullptr ) return;
-	_node			= new node( * _other_node );
-	_node->ancestor	= _node_ancestor;
-	copy_recursion( _node->left , _other_node->left , _node );
-	copy_recursion( _node->right, _other_node->right, _node );
-}
-///////////////////////////// END CONSTRUCTORS /////////////////////////////
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-///////////////////////////// BEGIN ASK METHODS /////////////////////////////
-bool empty() const noexcept {
-	return root == nullptr;
+tree(tree&& other)
+    : header            (std::move             (other.header           ) ),
+      _key_compare      (std::move_if_noexcept (other._key_compare     ) ),
+      _random_generator (std::move_if_noexcept (other._random_generator) ),
+      _link_allocator   (std::move_if_noexcept (other._link_allocator  ) ),
+      node_count        (std::move             (other.node_count       ) )
+{
+    other.reset_header();
 }
 
-size_type size() const {
-	if( empty() ) return 0;
-	return root->count();
+tree& operator= (const tree& other)
+{
+    if (this == &other) { return *this; }
+
+    clear();
+
+    _key_compare      = other._key_compare;
+    _random_generator = other._random_generator;
+    _link_allocator   = other._link_allocator;
+    node_count        = other.node_count;
+
+    copy_tree(other);
+
+    return *this;
 }
 
-T lowest() const {
-    if( empty() ) throw empty_treap( "T", "lowest()" );
-    return * cbegin();
-}
-T highest() const {
-    if( empty() ) throw empty_treap( "T", "highest()" );
-    return * crbegin();
+tree& operator= (tree&& other)
+{
+    if (this == &other) { return *this; }
+    // XXX: check get_allocator() == other.get_allocator()
+
+    clear();
+
+    header            = std::move             (other.header);
+    _key_compare      = std::move_if_noexcept (other._key_compare);
+    _random_generator = std::move_if_noexcept (other._random_generator);
+    _link_allocator   = std::move_if_noexcept (other._link_allocator);
+    node_count        = std::move             (other.node_count);
+
+    other.reset_header();
+
+    return *this;
 }
 
-bool contains( T const & val ) const {
-	return find( val ) != cend();
+void swap(tree& other) {
+    swap(header, other.header);
+    swap(_key_compare, other._key_compare);
+    swap(_random_generator, other._random_generator);
+    swap(_link_allocator, other._link_allocator);
+    swap(node_count, other.node_count);
+}
+///////////////////////////////////////////////// END CONSTRUCTORS /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN CAPACITY /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+bool empty() const
+{
+    return node_count == 0;
 }
 
-iterator       find( T const & val )       { return find_internal( val ); }
-const_iterator find( T const & val ) const { return find_internal( val ); }
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-iterator find_internal( T const & val ) const {
-    node * _node( root );
-    while( _node != nullptr )
-        if( eq_compare( _node->key, val ) ) {
-			if( eq_compare( val, _node->key ) ) return iterator( _node );
-			_node = _node->right;
-        } else {
-			if( ! eq_compare( val, _node->key ) ) return iterator( _node );
-			_node = _node->left;
-        }
-	return ncend();
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-
-iterator       lower_bound()       { return ncbegin(); }
-const_iterator lower_bound() const { return cbegin (); }
-// returns first element greater then or equal val ( or past-the-end when no hits )
-// if there are no equal elements this function returns same as upper_bound
-iterator       lower_bound( T const & val )       { return lower_bound_internal( val ); }
-const_iterator lower_bound( T const & val ) const { return lower_bound_internal( val ); }
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-iterator lower_bound_internal( T const & val ) const {
-	if( empty() ) return ncend();
-	node * _node( root );
-	node * best_so_far( nullptr );
-	while( true ) {
-		if( eq_compare( val, _node->key ) ) {
-			if( ! _node->has_left() ) return iterator( _node );
-			best_so_far = _node;
-			_node = _node->left;
-		} else {
-			if( ! _node->has_right() ) return lower_bound_internal_best_so_far( best_so_far );
-			_node = _node->right;
-		}
-	}
-}
-iterator lower_bound_internal_best_so_far( node * const best_so_far ) const {
-    if( best_so_far == nullptr ) return ncend();
-    return iterator( best_so_far );
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-
-iterator       upper_bound()       { return ncend(); }
-const_iterator upper_bound() const { return cend (); }
-// returns first element greater then val ( or past-the-end when no hits )
-// if there are some equal elements this function returns iterator afterwards last equal element
-iterator       upper_bound( T const & val )       { return upper_bound_internal( val ); }
-const_iterator upper_bound( T const & val ) const { return upper_bound_internal( val ); }
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-iterator upper_bound_internal( T const & val ) const {
-	if( empty() ) return ncend();
-	node * _node( root );
-	node * best_so_far( nullptr );
-	while( true ) {
-		if( ! eq_compare( _node->key, val ) ) {
-			if( ! _node->has_left() ) return iterator( _node );
-			best_so_far = _node;
-			_node = _node->left;
-		} else {
-			if( ! _node->has_right() ) return upper_bound_internal_best_so_far( best_so_far );
-			_node = _node->right;
-		}
-	}
-}
-iterator upper_bound_internal_best_so_far( node * const best_so_far ) const {
-    if( best_so_far == nullptr ) return ncend();
-    return iterator( best_so_far );
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-
-std::pair<treap, treap> split( T const & val ) try {
-	node * _new_node( new node( val, 1.1 ) );
-    insert_node( _new_node );
-    treap	treap_first( compare, URNG( radom ) ),
-			treap_second( compare, URNG( radom ) );
-    copy_recursion( treap_first .root, root->left );
-    copy_recursion( treap_second.root, root->right );
-    erase_internal( _new_node );
-    return std::make_pair( treap_first, treap_second );
-} catch( ... ) {
-	if( root != nullptr && root->priority > 1.01 ) erase_internal( root );
-	throw;
-}
-std::pair<treap, treap> split( T const & val ) const {
-	treap treap_copy = treap( * this );
-    return treap_copy.split( val );
+size_type size() const
+{
+    return node_count;
 }
 
-// if true, than merge is logarithmic ( move ) or linear ( copy ), otherwise linear-logarithmic
-static bool can_fast_merge( treap const & treap_first, treap const & treap_second ) {
-    return (
-		! treap_first .ne_compare( treap_second.lowest(), treap_first .highest() ) ||
-		! treap_second.ne_compare( treap_first .lowest(), treap_second.highest() )
-    );
+size_type max_size() const
+{
+    return get_allocator().max_size();
+}
+///////////////////////////////////////////////// END CAPACITY /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN MODIFIERS /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+void clear()
+{
+    delete_node_tree(get_root());
+    reset_header();
 }
 
-static treap merge( treap const & treap_first, treap const & treap_second ) {
-	if( treap_first .empty() ) return treap_second;
-	if( treap_second.empty() ) return treap_first;
+iterator insert_equal(const value_type& val)
+{
+    link_ptr node(create_node( val ));
+    insert_equal(node);
+    return iterator(node);
+}
 
-	if( ! treap_first.ne_compare( treap_second.lowest(), treap_first.highest() ) ) {
-		return merge_fast( treap_first, treap_second );
-    } else if( ! treap_second.ne_compare( treap_first.lowest(), treap_second.highest() ) ) {
-		return merge_fast( treap_second, treap_first );
-    } else
-		return merge_insert( treap_first, treap_second );
+iterator insert_equal(value_type&& val)
+{
+    link_ptr node(create_node( std::forward(val) ));
+    insert_equal(node);
+    return iterator(node);
 }
-static treap merge( treap && treap_first, treap && treap_second ) {
-	if( treap_first .empty() ) return treap_second;
-	if( treap_second.empty() ) return treap_first;
 
-	if( ! treap_first.ne_compare( treap_second.lowest(), treap_first.highest() ) ) {
-		return merge_fast( std::move( treap_first ), std::move( treap_second ) );
-    } else if( ! treap_second.ne_compare( treap_first.lowest(), treap_second.highest() ) ) {
-		return merge_fast( std::move( treap_second ), std::move( treap_first ) );
-    } else
-		return merge_insert( treap_first, treap_second );
-}
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-static treap merge_fast( treap const & treap_first, treap const & treap_second ) {
-    treap treap_merged( treap_first.compare, URNG( treap_first.radom ) );
-    treap_merged.root = new node( *treap_first.ncrbegin().elem );
-    copy_recursion( treap_merged.root->left , treap_first .root, treap_merged.root );
-    copy_recursion( treap_merged.root->right, treap_second.root, treap_merged.root );
-    treap_merged.erase_internal( treap_merged.root );
-    return treap_merged;
-}
-static treap merge_fast( treap && treap_first, treap && treap_second ) {
-    treap treap_merged( treap_first.compare, URNG( treap_first.radom ) );
-    treap_merged.root = new node( *treap_first.ncrbegin().elem );
-    treap_merged.root->insert_left ( treap_first .root );
-    treap_merged.root->insert_right( treap_second.root );
-    treap_first .root = nullptr;
-    treap_second.root = nullptr;
-    treap_merged.erase_internal( treap_merged.root );
-    return treap_merged;
-}
-static treap merge_insert( treap treap_merged, treap const & treap_second ) {
-	for( T const & val : treap_second )
-		treap_merged.insert( val );
-	return treap_merged;
-}
-static treap merge_insert( treap treap_merged, treap && treap_second ) {
-	for( T const & val : treap_second )
-		treap_merged.insert( val );
-	treap_second.root = nullptr;
-	return treap_merged;
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
+iterator insert_equal(const_iterator hint, const value_type& val)
+{
+    link_ptr node(create_node( val ));
 
-key_compare      key_comp  () const { return compare; }
-value_compare    value_comp() const { return compare; }
-random_generator random_gen() const { return radom  ; }
-///////////////////////////// END ASK METHODS /////////////////////////////
-///////////////////////////// BEGIN ITERATORS METHODS /////////////////////////////
-iterator begin() {
-	if( empty() ) return ncend();
-	node * _node( root );
-	while( _node->has_left() ) _node = _node->left;
-	return iterator( _node );
-}
-const_iterator begin() const {
-	if( empty() ) return cend();
-	node * _node( root );
-	while( _node->has_left() ) _node = _node->left;
-	return const_iterator( _node );
-}
-const_iterator cbegin() const {
-	if( empty() ) return cend();
-	node * _node( root );
-	while( _node->has_left() ) _node = _node->left;
-	return const_iterator( _node );
-}
-reverse_iterator rbegin() {
-	if( empty() ) return ncrend();
-	node * _node( root );
-	while( _node->has_right() ) _node = _node->right;
-	return reverse_iterator( _node );
-}
-const_reverse_iterator rbegin() const {
-	if( empty() ) return crend();
-	node * _node( root );
-	while( _node->has_right() ) _node = _node->right;
-	return const_reverse_iterator( _node );
-}
-const_reverse_iterator crbegin() const {
-	if( empty() ) return crend();
-	node * _node( root );
-	while( _node->has_right() ) _node = _node->right;
-	return const_reverse_iterator( _node );
-}
-iterator               end  ()       { return iterator               ( root, true ); }
-const_iterator         end  () const { return const_iterator         ( root, true ); }
-const_iterator         cend () const { return const_iterator         ( root, true ); }
-reverse_iterator       rend ()       { return reverse_iterator       ( root, true ); }
-const_reverse_iterator rend () const { return const_reverse_iterator ( root, true ); }
-const_reverse_iterator crend() const { return const_reverse_iterator ( root, true ); }
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-iterator ncbegin() const {
-	if( empty() ) return ncend();
-	node * _node( root );
-	while( _node->has_left() ) _node = _node->left;
-	return iterator( _node );
-}
-reverse_iterator ncrbegin() const {
-	if( empty() ) return ncrend();
-	node * _node( root );
-	while( _node->has_right() ) _node = _node->right;
-	return reverse_iterator( _node );
-}
-iterator         ncend () const { return iterator        ( root, true ); }
-reverse_iterator ncrend() const { return reverse_iterator( root, true ); }
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-///////////////////////////// END ITERATORS METHODS /////////////////////////////
-///////////////////////////// BEGIN CHANGING METHODS /////////////////////////////
-iterator insert( T const & val ) {
-	node * const _new_node( new node( val, radom ) );
-	if( empty() ) return iterator( root = _new_node );
-    insert_node( _new_node );
-    return iterator( _new_node );
-}
-iterator insert( const_iterator const & it, T const & val ) { return insert( val ); }
-
-template< typename... Args >
-iterator emplace( Args... _args ) {
-	node * const _new_node( new node( node_emplace(), radom, _args... ) );
-	if( empty() ) return iterator( root = _new_node );
-    insert_node( _new_node );
-    return iterator( _new_node );
-}
-template< typename... Args >
-iterator emplace_hint( const_iterator const & it, Args... _args ) { return emplace( _args... ); }
-
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-void insert_node( node * const _new_node ) noexcept( noexcept( compare( _new_node->key, _new_node->key ) ) ) {
-	node * _node( root );
-    while( ! _new_node->has_ancestor() )
-		if( eq_compare( _node->key, _new_node->key ) )
-			if( _node->has_right() ) _node = _node->right;
-			else                     _node->insert_right( _new_node );
-		else
-			if( _node->has_left() ) _node = _node->left;
-			else                    _node->insert_left( _new_node );
-	rotation( _new_node );
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-
-size_type erase( T const & val ) try {
-	size_type count = 0;
-    while( true ) {
-		const_iterator it = find( val );
-		if( it == cend() ) return count;
-		++count;
-		erase( it );
+    if (correct_hint_equal(hint, node)) {
+        insert_left(hint, node);
     }
-} catch( erase_past_the_end const & ) {
-	throw erase_past_the_end( "size_type", "erase(T const &)" );
-} catch( erase_invalid_iterator const & ) {
-	throw erase_invalid_iterator( "size_type", "erase(T const &)" );
+
+    insert_equal(node);
+    return iterator(node);
 }
 
-void erase( const_iterator const & it ) {
-	if( it == cend() ) throw erase_past_the_end( "void", "erase(const_iterator const &)" );
-	if( iterator_invalid( it ) ) throw erase_invalid_iterator( "void", "erase(const_iterator const &)" );
-	erase_internal( it.elem );
-}
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-void erase_internal( node * const _node ) noexcept {
-	if( ! ( _node->has_ancestor() || _node->has_left() || _node->has_right() ) ) {
-		delete _node;
-		root = nullptr;
-		return;
-	}
-	while( true ) {
-		if( _node->has_left() )
-			if( _node->has_right() ) rotate_one_of_heirs_with_highest_priority( _node );
-			else                     rotate_left( _node->left );
-		else if( _node->has_right() ) rotate_right( _node->right );
-		else {
-			delete _node;
-			break;
-		}
-	}
-}
-bool iterator_invalid( const_iterator const & it ) noexcept {
-	if( it.elem == nullptr ) return true;
-	if( it.is_end && it.elem != root ) return true;
-	if( get_root( it.elem ) != root ) return true;
-	return false;
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
+iterator insert_equal(const_iterator hint, value_type&& val)
+{
+    link_ptr node(create_node( std::forward(val) ));
 
-void clear() noexcept {
-	delete root;
-	root = nullptr;
-}
-///////////////////////////// END CHANGING METHODS /////////////////////////////
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-///////////////////////////// BEGIN COMPARE METHODS /////////////////////////////
-bool equal( T const & first, T const & second ) const noexcept( noexcept( compare( first, second ) ) )
-	{ return ( compare( first, second ) == compare( second, first ) ); }
-bool eq_compare( T const & first, T const & second ) const noexcept( noexcept( compare( first, second ) ) ) {
-    if( equal( first, second ) ) return true;
-    return compare( first, second );
-}
-bool ne_compare( T const & first, T const & second ) const noexcept( noexcept( compare( first, second ) ) ) {
-    if( equal( first, second ) ) return false;
-    return compare( first, second );
-}
-///////////////////////////// END COMPARE METHODS /////////////////////////////
-///////////////////////////// BEGIN ROTATION /////////////////////////////
-void rotation( node * const & _node ) noexcept {
-    while( _node->has_ancestor() && _node->priority > _node->ancestor->priority )
-		if( _node == _node->ancestor->right ) rotate_right( _node );
-		else                                  rotate_left( _node );
-    if( ! _node->has_ancestor() ) root = _node;
-}
-void rotate_left( node * const & _node ) noexcept {
-	node * const x         ( _node       );
-	node * const y         ( x->ancestor );
-	node * const y_ancestor( y->ancestor );
-	node * const B         ( x->right    );
+    if (correct_hint_equal(hint, node)) {
+        insert_left(hint, node);
+    }
 
-	if( y_ancestor != nullptr )
-		if( y_ancestor->left == y )	y_ancestor->left  = x;
-		else						y_ancestor->right = x;
-	else
-		root = x;
-    x->ancestor = y_ancestor;
+    insert_equal(node);
+    return iterator(node);
+}
 
-    x->right    = y;
-    y->ancestor = x;
+iterator insert_unique(const value_type& val)
+{
+    link_ptr node(create_node( val ));
+    return iterator(insert_unique(node));
+}
+
+iterator insert_unique(value_type&& val)
+{
+    link_ptr node(create_node( std::forward<value_type>(val) ));
+    return iterator(insert_unique(node));
+}
+
+iterator insert_unique(const_iterator hint, const value_type& val)
+{
+    link_ptr node(create_node( val ));
+
+    if (correct_hint_unique(hint, node)) {
+        insert_left(hint, node);
+    }
+
+    return iterator(insert_unique(node));
+}
+
+iterator insert_unique(const_iterator hint, value_type&& val)
+{
+    link_ptr node(create_node( std::forward(val) ));
+
+    if (correct_hint_unique(hint, node)) {
+        insert_left(hint, node);
+    }
+
+    return iterator(insert_unique(node));
+}
+
+template <class... Args>
+iterator emplace_equal(Args&&... args)
+{
+    link_ptr node(create_node( std::forward<Args>(args)... ));
+    insert_equal(node);
+    return iterator(node);
+}
+
+template <class... Args>
+iterator emplace_equal_hint(const_iterator hint, Args&&... args)
+{
+    link_ptr node(create_node( std::forward<Args>(args)... ));
+
+    if (correct_hint_equal(hint, node)) {
+        insert_left(hint, node);
+    }
+
+    insert_equal(node);
+    return iterator(node);
+}
+
+template <class... Args>
+iterator emplace_unique(Args&&... args)
+{
+    link_ptr node(create_node( std::forward<Args>(args)... ));
+    return iterator(insert_unique(node));
+}
+
+template <class... Args>
+iterator emplace_unique_hint(const_iterator hint, Args&&... args)
+{
+    link_ptr node(create_node( std::forward<Args>(args)... ));
+
+    if (correct_hint_unique(hint, node)) {
+        insert_left(hint, node);
+    }
+
+    return iterator(insert_unique(node));
+}
+
+protected: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PROTECTED
+bool correct_hint_equal(base_ptr)
+{
+    // TODO
+    return false;
+}
+
+bool correct_hint_unique(base_ptr)
+{
+    // TODO
+    return false;
+}
+
+void insert_equal(link_ptr new_node)
+{
+    insert_left(find_w_check(get_root(), new_node->get_key(), get_header()), new_node);
+}
+
+link_ptr insert_unique(link_ptr new_node)
+{
+    base_ptr found_node = find_w_check(get_root(), new_node->get_key(), get_header());
+
+    if (found_node != get_header() && key_comp_le(found_node, new_node)) {
+        return (link_ptr)found_node;
+    }
+
+    insert_left(found_node, new_node);
+    return new_node;
+}
+
+void insert_left(base_ptr insertion_point, link_ptr new_node)
+{
+    if (insertion_point == get_header()) {
+        new_node->right = get_header();
+        new_node->parent = get_header()->right;
+        get_header()->right->right = new_node;
+        get_header()->right = new_node;
+    } else {
+        new_node->left = insertion_point->left;
+        new_node->parent = insertion_point;
+        insertion_point->left = new_node;
+        if (new_node->left == get_header()) {
+            get_header()->left = new_node;
+        }
+    }
+
+    rebalance_new_node(new_node);
+}
+
+private: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PRIVATE
+// TODO: copy tree with different Key and Value
+inline void copy_tree(const tree& other)
+{
+    copy_tree(get_root(), other.get_root(), nullptr, other.get_header());
+}
+
+void copy_tree(link_ptr& node, link_ptr other_node, link_ptr parent, base_ptr other_header)
+{
+    while (other_node != nullptr && other_node != other_header) {
+        node = create_node(*other_node);
+        node->parent = parent;
+
+        copy_tree(node->right, other_node->right, node, other_header);
+
+        parent = node;
+        node = node->left;
+        other_node = other_node->left;
+    }
+}
+
+inline link_ptr get_root()
+{
+    return (link_ptr)(get_header()->parent);
+}
+
+inline base_ptr get_header()
+{
+    return &header;
+}
+
+inline void reset_header()
+{
+    header.parent = nullptr;
+    header.left   = &header;
+    header.right  = &header;
+    node_count    = 0;
+}
+///////////////////////////////////////////////// END MODIFIERS /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN QUERIES /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+iterator find(const key_type& key)
+{
+    if (node_count == 0) {
+        return iterator(get_header());
+    } else {
+        return iterator(find_equal(get_root(), key));
+    }
+}
+
+const_iterator find(const key_type& key) const
+{
+    if (node_count == 0) {
+        return iterator(get_header());
+    } else {
+        return iterator(find(get_root(), key));
+    }
+}
+
+// finds any node with key equal to lower bound or best_node if no such node exists
+base_ptr find(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    while (true) {
+        if (key_comp_lt(node, key)) {
+            if (node->right == nullptr || node->right == get_header()) {
+                return best_node;
+            } else {
+                node = node->right;
+            }
+        } else if (key_comp_le(node, key)) {
+            return node;
+        } else {
+            if (node->left == nullptr || node->left == get_header()) {
+                return node;
+            } else {
+                best_node = node;
+                node = node->left;
+            }
+        }
+    }
+}
+
+base_ptr find_w_check(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    if (node == nullptr || node == get_header()) {
+        return best_node;
+    } else {
+        return find(node, key, best_node);
+    }
+}
+
+// finds first node with key greater or equal to given key or best_node if no such node exists
+base_ptr lower_bound(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    while (true) {
+        if (key_comp_lt(node, key)) {
+            if (node->right == nullptr || node->right == get_header()) {
+                return best_node;
+            } else {
+                node = node->right;
+            }
+        } else {
+            if (node->left == nullptr || node->left == get_header()) {
+                return node;
+            } else {
+                best_node = node;
+                node = node->left;
+            }
+        }
+    }
+}
+
+base_ptr lower_bound_w_check(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    if (node == nullptr || node == get_header()) {
+        return best_node;
+    } else {
+        return lower_bound(node, key, best_node);
+    }
+}
+
+// finds first node with key greater to given key or best_node if no such node exists
+base_ptr upper_bound(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    while (true) {
+        if (key_comp_le(node, key)) {
+            if (node->right == nullptr || node->right == get_header()) {
+                return best_node;
+            } else {
+                node = node->right;
+            }
+        } else {
+            if (node->left == nullptr || node->left == get_header()) {
+                return node;
+            } else {
+                best_node = node;
+                node = node->left;
+            }
+        }
+    }
+}
+
+base_ptr upper_bound_w_check(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    if (node == nullptr || node == get_header()) {
+        return best_node;
+    } else {
+        return upper_bound(node, key, best_node);
+    }
+}
+
+// return lower and upper bound
+std::pair<base_ptr, base_ptr> equal_range(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    while (true) {
+        if (key_comp_lt(node, key)) {
+            if (node->right == nullptr || node->right == get_header()) {
+                return std::make_pair(best_node, best_node);
+            } else {
+                node = node->right;
+            }
+        } else if (key_comp_le(node, key)) {
+            return std::make_pair(lower_bound_w_check(node->left, key, node), upper_bound_w_check(node->right, key, best_node));
+        } else {
+            if (node->left == nullptr || node->left == get_header()) {
+                return std::make_pair(node, node);
+            } else {
+                best_node = node;
+                node = node->left;
+            }
+        }
+    }
+}
+
+std::pair<base_ptr, base_ptr> equal_range_w_check(base_ptr node, const key_type& key, base_ptr best_node)
+{
+    if (node == nullptr || node == get_header()) {
+        return std::make_pair(best_node, best_node);
+    } else {
+        return equal_range(node, key, best_node);
+    }
+}
+///////////////////////////////////////////////// END QUERIES /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN OBSERVERS /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+key_compare      key_comp     () const { return _key_compare;      }
+random_generator random_gen   () const { return _random_generator; }
+allocator_type   get_allocator() const { return _link_allocator;   }
+///////////////////////////////////////////////// END OBSERVERS /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN ROTATION /////////////////////////////////////////////////
+private: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PRIVATE
+void rebalance_new_node(base_ptr node)
+{
+    if (node->parent != nullptr && priority_comp_lt(node, node->parent)) {
+        rebalance_to_root_wo_check(node);
+    } else {
+        rebalance_to_leaf(node);
+    }
+}
+
+void rebalance_to_root_wo_check(base_ptr node)
+{
+    do {
+        rotate_parent(node);
+    } while (node->parent != nullptr && priority_comp_lt(node, node->parent));
+}
+
+inline void rebalance_to_root(base_ptr node)
+{
+    if (node->parent != nullptr && priority_comp_lt(node, node->parent)) {
+        rebalance_to_root_wo_check(node);
+    }
+}
+
+void rebalance_to_leaf(base_ptr node)
+{
+    left_lt:
+        if (node->right != nullptr && priority_comp_lt(node->right, node)) {
+            rotate_right(node);
+            goto left_lt;
+        } else {
+            rotate_left(node);
+            goto unknown;
+        }
+
+    right_lt:
+        if (node->left != nullptr && priority_comp_lt(node->left, node)) {
+            rotate_left(node);
+            goto right_lt;
+        } else {
+            rotate_right(node);
+            goto unknown;
+        }
+
+    unknown:
+        if (node->left != nullptr && priority_comp_lt(node->left, node)) {
+            if (node->right != nullptr && priority_comp_lt(node->right, node->left)) {
+                rotate_right(node);
+                goto left_lt;
+            } else {
+                rotate_left(node);
+                goto right_lt;
+            }
+        } else if (node->right != nullptr && priority_comp_lt(node->right, node)) {
+            rotate_right(node);
+            goto left_lt;
+        }
+}
+
+// rotates node with its left child
+void rotate_left(base_ptr y)
+{
+    base_ptr x        (y->left  );
+    base_ptr y_parent (y->parent);
+    base_ptr B        (x->right );
+
+	if (y_parent != nullptr) {
+        if (y_parent->left == y) { y_parent->left  = x; }
+        else                     { y_parent->right = x; }
+    }
+    x->parent = y_parent;
+
+    x->right  = y;
+    y->parent = x;
 
     y->left = B;
-    if( B != nullptr ) B->ancestor = y;
-}
-void rotate_right( node * const & _node ) noexcept {
-	node * const y         ( _node       );
-	node * const x         ( y->ancestor );
-	node * const x_ancestor( x->ancestor );
-	node * const B         ( y->left     );
-
-	if( x_ancestor != nullptr )
-		if( x_ancestor->left == x )	x_ancestor->left  = y;
-		else						x_ancestor->right = y;
-	else
-		root = y;
-	y->ancestor = x_ancestor;
-
-    y->left     = x;
-    x->ancestor = y;
-
-	x->right = B;
-	if( B != nullptr ) B->ancestor = x;
-}
-void rotate_one_of_heirs_with_highest_priority( node * const & _node ) noexcept {
-	if( _node->left->priority > _node->right->priority ) rotate_left( _node->left );
-	else                                                 rotate_right( _node->right );
-}
-///////////////////////////// END ROTATION /////////////////////////////
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-///////////////////////////// BEGIN NODE CLASS /////////////////////////////
-struct node_emplace {};
-class node {
-
-public: //////////////////////////////////////////////////// PUBLIC
-//////////////// BEGIN DECLARATIONS ////////////////
-friend class treap;
-
-const T key;
-float   priority;
-node *  ancestor;
-node *  left;
-node *  right;
-//////////////// END DECLARATIONS ////////////////
-//////////////// BEGIN CONSTRUCTORS ////////////////
-explicit node( T const & _key, URNG & _radom )
-	: node(
-		_key,
-		std::generate_canonical<float, std::numeric_limits<float>::digits>( _radom )
-	  ) {}
-
-explicit node( T const & _key, float _priority )
-	: key( _key ),
-	  priority( _priority ),
-	  ancestor( nullptr ),
-	  left( nullptr ),
-      right( nullptr ) {}
-
-template< typename... Args >
-explicit node( node_emplace const &, URNG & _radom, Args... _args )
-	: node(
-		node_emplace(),
-		std::generate_canonical<float, std::numeric_limits<float>::digits>( _radom ),
-		_args...
-	  ) {}
-
-template< typename... Args >
-explicit node( node_emplace const &, const float _priority, Args... _args )
-	: key     ( _args... ),
-      priority( _priority ),
-	  ancestor( nullptr ),
-	  left    ( nullptr ),
-	  right   ( nullptr ) {}
-
-node( node const & _other )
-	: key     ( _other.key ),
-      priority( _other.priority ),
-      ancestor( nullptr ),
-      left    ( nullptr ),
-	  right   ( nullptr ) {}
-
-node& operator=( node const & ) = delete;
-node( node && )                 = delete;
-node& operator=( node && )      = delete;
-//////////////// END CONSTRUCTORS ////////////////
-//////////////// BEGIN DESTRUCTOR ////////////////
-~node() noexcept {
-	if( has_ancestor() )
-		if( this == ancestor->left ) ancestor->left  = nullptr;
-		else                         ancestor->right = nullptr;
-	if( has_left() )
-		delete left;
-	if( has_right() )
-		delete right;
-}
-//////////////// END DESTRUCTOR ////////////////
-//////////////// BEGIN METHODS ////////////////
-size_type count() const {
-	size_type l = count( left );
-	size_type r = count( right );
-	size_type sum = l + r;
-	if( sum < l && sum < r )
-		throw size_type_overflow( "size_type", "size()" );
-	if( sum == std::numeric_limits<size_type>::max() )
-		throw size_type_overflow( "size_type", "size()" );
-    return sum + 1;
+    if (B != nullptr) { B->parent = y; }
 }
 
-static size_type count( node const * const & heir ) {
-    if( heir == nullptr ) return 0;
-    return heir->count();
+// rotates node with its right child
+void rotate_right(base_ptr y)
+{
+    base_ptr x        (y->right );
+    base_ptr y_parent (y->parent);
+    base_ptr B        (x->left  );
+
+	if (y_parent != nullptr) {
+        if (y_parent->left == y) { y_parent->left  = x; }
+        else                     { y_parent->right = x; }
+    }
+    x->parent = y_parent;
+
+    x->right  = y;
+    y->parent = x;
+
+    y->left = B;
+    if (B != nullptr) { B->parent = y; }
 }
 
-bool has_left    () const noexcept { return left     != nullptr; }
-bool has_right   () const noexcept { return right    != nullptr; }
-bool has_ancestor() const noexcept { return ancestor != nullptr; }
-
-void insert_left( node * const & _son ) noexcept {
-    left           = _son;
-    _son->ancestor = this;
-}
-void insert_right( node * const & _son ) noexcept {
-    right          = _son;
-    _son->ancestor = this;
-}
-//////////////// END METHODS ////////////////
-
-};
-///////////////////////////// END NODE CLASS /////////////////////////////
-private: /////////////////////////////////////////////////////////////////////////////////// PRIVATE
-static node * iterator_increment_internal( node * _node, bool & is_end ) {
-	if( is_end ) throw incrementing_past_the_end( "", "" );
-	if( _node == nullptr ) throw operation_invalid( "", "" );
-    if( _node->has_right() ) {
-		_node = _node->right;
-		while( _node->has_left() ) _node = _node->left;
-		return _node;
-    } else while( true )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->left ) return _node->ancestor;
-			else                                 _node = _node->ancestor;
-		else {
-			is_end = true;
-			return _node;
-		}
-}
-static node * iterator_decrement_internal( node * _node, bool & is_end ) {
-	if( _node == nullptr )
-		if( is_end ) throw decrementing_before_begin( "", "" );
-		else         throw operation_invalid( "", "" );
-	if( is_end ) {
-		is_end = false;
-		while( _node->has_right() ) _node = _node->right;
-		return _node;
-	} else if( _node->has_left() ) {
-		_node = _node->left;
-		while( _node->has_right() ) _node = _node->right;
-		return _node;
-	} else while( true )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->right ) return _node->ancestor;
-			else                                  _node = _node->ancestor;
-		else throw decrementing_before_begin( "", "" );
-}
-static node * reverse_iterator_increment_internal( node * _node, bool & is_end ) {
-	if( is_end ) throw incrementing_past_the_end( "", "" );
-	if( _node == nullptr ) throw operation_invalid( "", "" );
-    if( _node->has_left() ) {
-		_node = _node->left;
-		while( _node->has_right() ) _node = _node->right;
-		return _node;
-	} else while( true )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->right ) return _node->ancestor;
-			else                                  _node = _node->ancestor;
-		else {
-			is_end = true;
-			return _node;
-		}
-}
-static node * reverse_iterator_decrement_internal( node * _node, bool & is_end ) {
-	if( _node == nullptr )
-		if( is_end ) throw decrementing_before_begin( "", "" );
-		else         throw operation_invalid( "", "" );
-	if( is_end ) {
-		is_end = false;
-		while( _node->has_left() ) _node = _node->left;
-		return _node;
-	} else if( _node->has_right() ) {
-		_node = _node->right;
-		while( _node->has_left() ) _node = _node->left;
-		return _node;
-	} else while( true )
-		if( _node->has_ancestor() )
-			if( _node == _node->ancestor->left ) return _node->ancestor;
-			else                                 _node = _node->ancestor;
-		else throw decrementing_before_begin( "", "" );
-}
-static node * get_root( node * _node ) {
-	while( _node->has_ancestor() ) _node = _node->ancestor;
-	return _node;
-}
-public: /////////////////////////////////////////////////////////////////////////////////// PUBLIC
-///////////////////////////// BEGIN ITERATOR CLASS /////////////////////////////
-// default iterator
-class iterator : public std::iterator<std::input_iterator_tag, const T> {
-
-//////////////// BEGIN DECLARATIONS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-friend class treap;
-
-node * elem;
-bool   is_end;
-//////////////// END DECLARATIONS ////////////////
-//////////////// BEGIN CONSTRUCTORS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-explicit iterator( node * const _elem_ptr )
-	: elem( _elem_ptr ), is_end( false ) {}
-explicit iterator( node * const _elem_ptr, bool _is_end )
-	: elem( _elem_ptr ), is_end( _is_end ) {}
-public: //////////////////////////////////////////////////// PUBLIC
-iterator()
-	: elem( nullptr ), is_end( false ) {}
-
-iterator( iterator const & _other )
-	: elem( _other.elem ), is_end( _other.is_end ) {}
-iterator & operator=( iterator const & _other ) {
-	elem   = _other.elem;
-	is_end = _other.is_end;
-	return * this;
-}
-
-iterator( iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end )
-	{
-		_other.elem = nullptr;
-}
-iterator & operator=( iterator && _other ) noexcept {
-	elem        = _other.elem;
-	_other.elem = nullptr;
-	is_end      = _other.is_end;
-	return * this;
-}
-//////////////// END CONSTRUCTORS ////////////////
-//////////////// BEGIN OPERATORS ////////////////
-bool operator==( iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( iterator const & _other ) const noexcept { return ! operator==( _other ); }
-bool operator==( const_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( const_iterator const & _other ) const noexcept { return ! operator==( _other ); }
-
-iterator & operator++() try {
-	elem = iterator_increment_internal( elem, is_end );
-	return * this;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "iterator &", "iterator::operator++()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "iterator &", "iterator::operator++()" );
-}
-iterator operator++( int ) try {
-	iterator self( * this );
-	operator++();
-	return self;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "iterator", "iterator::operator++(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "iterator", "iterator::operator++(int)" );
-}
-
-iterator & operator--() try {
-	elem = iterator_decrement_internal( elem, is_end );
-	return * this;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "iterator &", "iterator::operator--()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "iterator &", "iterator::operator--()" );
-}
-iterator operator--( int ) try {
-	iterator self( * this );
-	operator--();
-	return self;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "iterator", "iterator::operator--(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "iterator", "iterator::operator--(int)" );
-}
-
-T const & operator*() const {
-	if( is_end ) throw dereference_past_the_end( "T const &", "iterator::operator*()" );
-	if( elem == nullptr ) throw operation_invalid( "T const &", "iterator::operator*()" );
-	return elem->key;
-}
-//////////////// END OPERATORS ////////////////
-
-};
-
-// const default iterator
-class const_iterator : public std::iterator<std::input_iterator_tag, const T>  {
-
-//////////////// BEGIN DECLARATIONS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-friend class treap;
-
-node * elem;
-bool   is_end;
-//////////////// END DECLARATIONS ////////////////
-//////////////// BEGIN CONSTRUCTORS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-explicit const_iterator( node * const _elem_ptr )
-	: elem( _elem_ptr ), is_end( false ) {}
-explicit const_iterator( node * const _elem_ptr, bool _is_end )
-	: elem( _elem_ptr ), is_end( _is_end ) {}
-public: //////////////////////////////////////////////////// PUBLIC
-const_iterator()
-	: elem( nullptr ), is_end( false ) {}
-
-const_iterator( iterator const & _it )
-	: elem( _it.elem ), is_end( _it.is_end ) {}
-
-const_iterator( const_iterator const & _other )
-	: elem( _other.elem ), is_end( _other.is_end ) {}
-const_iterator & operator=( const_iterator const & _other ) {
-	elem   = _other.elem;
-	is_end = _other.is_end;
-	return * this;
-}
-
-const_iterator( const_iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end )
-	{
-		_other.elem = nullptr;
-}
-const_iterator & operator=( const_iterator && _other ) noexcept {
-	elem        = _other.elem;
-	_other.elem = nullptr;
-	is_end      = _other.is_end;
-	return * this;
-}
-//////////////// END CONSTRUCTORS ////////////////
-//////////////// BEGIN OPERATORS ////////////////
-bool operator==( const_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( const_iterator const & _other ) const noexcept { return ! operator==( _other ); }
-
-const_iterator & operator++() try {
-	elem = iterator_increment_internal( elem, is_end );
-	return * this;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "const_iterator &", "const_iterator::operator++()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_iterator &", "const_iterator::operator++()" );
-}
-const_iterator operator++( int ) try {
-	const_iterator self( * this );
-	operator++();
-	return self;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "const_iterator", "const_iterator::operator++(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_iterator", "const_iterator::operator++(int)" );
-}
-
-const_iterator & operator--() try {
-	elem = iterator_decrement_internal( elem, is_end );
-	return * this;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "const_iterator &", "const_iterator::operator--()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_iterator &", "const_iterator::operator--()" );
-}
-const_iterator operator--( int ) try {
-	const_iterator self( * this );
-	operator--();
-	return self;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "const_iterator", "const_iterator::operator--(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_iterator", "const_iterator::operator--(int)" );
-}
-
-T const & operator*() const {
-	if( is_end ) throw dereference_past_the_end( "T const &", "const_iterator::operator*()" );
-	if( elem == nullptr ) throw operation_invalid( "T const &", "const_iterator::operator*()" );
-	return elem->key;
-}
-//////////////// END OPERATORS ////////////////
-
-};
-
-// reverse iterator
-class reverse_iterator : public std::iterator<std::input_iterator_tag, const T> {
-
-//////////////// BEGIN DECLARATIONS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-friend class treap;
-
-node * elem;
-bool         is_end;
-//////////////// END DECLARATIONS ////////////////
-//////////////// BEGIN CONSTRUCTORS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-explicit reverse_iterator( node * const _elem_ptr )
-	: elem( _elem_ptr ), is_end( false ) {}
-explicit reverse_iterator( node * const _elem_ptr, bool _is_end )
-	: elem( _elem_ptr ), is_end( _is_end ) {}
-public: //////////////////////////////////////////////////// PUBLIC
-reverse_iterator()
-	: elem( nullptr ), is_end( false ) {}
-
-reverse_iterator( reverse_iterator const & _other )
-	: elem( _other.elem ), is_end( _other.is_end ) {}
-reverse_iterator & operator=( reverse_iterator const & _other ) {
-	elem   = _other.elem;
-	is_end = _other.is_end;
-}
-
-reverse_iterator( reverse_iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end )
-	{
-		_other.elem = nullptr;
-}
-reverse_iterator & operator=( reverse_iterator && _other ) noexcept {
-	elem        = _other.elem;
-	is_end      = _other.is_end;
-	_other.elem = nullptr;
-}
-//////////////// END CONSTRUCTORS ////////////////
-//////////////// BEGIN OPERATORS ////////////////
-bool operator==( reverse_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( reverse_iterator const & _other ) const noexcept { return ! operator==( _other ); }
-bool operator==( const_reverse_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( const_reverse_iterator const & _other ) const noexcept { return ! operator==( _other ); }
-
-reverse_iterator & operator++() try {
-	elem = reverse_iterator_increment_internal( elem, is_end );
-	return * this;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "reverse_iterator &", "reverse_iterator::operator++()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "reverse_iterator &", "reverse_iterator::operator++()" );
-}
-reverse_iterator operator++( int ) try {
-	reverse_iterator self( * this );
-	operator++();
-	return self;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "reverse_iterator", "reverse_iterator::operator++(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "reverse_iterator", "reverse_iterator::operator++(int)" );
-}
-
-reverse_iterator & operator--() try {
-	elem = reverse_iterator_decrement_internal( elem, is_end );
-    return * this;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "reverse_iterator &", "reverse_iterator::operator--()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "reverse_iterator &", "reverse_iterator::operator--()" );
-}
-reverse_iterator operator--( int ) try {
-	reverse_iterator self( * this );
-	operator--();
-	return self;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "reverse_iterator", "reverse_iterator::operator--(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "reverse_iterator", "reverse_iterator::operator--(int)" );
-}
-
-T const & operator*() const {
-	if( is_end ) throw dereference_past_the_end( "T const &", "reverse_iterator::operator*()" );
-	if( elem == nullptr ) throw operation_invalid( "T const &", "reverse_iterator::operator*()" );
-	return elem->key;
-}
-
-iterator base() const {
-	if( is_end && elem == nullptr ) throw decrementing_before_begin( "iterator", "reverse_iterator::base()" );
-	bool temp_is_end = is_end;
-	try {
-		return iterator( reverse_iterator_decrement_internal( elem, temp_is_end ), temp_is_end );
-    } catch( decrementing_before_begin const & ) {
-		return iterator( get_root( elem ), true );
-    } catch( operation_invalid const & ) {
-		throw operation_invalid( "iterator", "reverse_iterator::base()" );
+// rotates node with its parent
+void rotate_parent(base_ptr node)
+{
+    if (node == node->parent->left) {
+        rotate_left (node->parent);
+    } else {
+        rotate_right(node->parent);
     }
 }
-//////////////// END OPERATORS ////////////////
+///////////////////////////////////////////////// END ROTATION /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN COMPARISION /////////////////////////////////////////////////
+protected: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PROTECTED
+inline bool key_comp_lt(link_ptr lhs, link_ptr rhs) { return key_comp_lt(lhs->get_key(), rhs->get_key()); }
+inline bool key_comp_le(link_ptr lhs, link_ptr rhs) { return key_comp_le(lhs->get_key(), rhs->get_key()); }
 
-};
+inline bool key_comp_lt(link_ptr lhs, const key_type& rhs) { return key_comp_lt(lhs->get_key(), rhs); }
+inline bool key_comp_le(link_ptr lhs, const key_type& rhs) { return key_comp_le(lhs->get_key(), rhs); }
 
-// const reverse iterator
-class const_reverse_iterator : public std::iterator<std::input_iterator_tag, const T> {
+inline bool key_comp_lt(const key_type& lhs, link_ptr rhs) { return key_comp_lt(lhs, rhs->get_key()); }
+inline bool key_comp_le(const key_type& lhs, link_ptr rhs) { return key_comp_le(lhs, rhs->get_key()); }
 
-//////////////// BEGIN DECLARATIONS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-friend class treap;
+inline bool key_comp_lt(base_ptr lhs, base_ptr rhs) { return key_comp_lt((link_ptr)lhs, (link_ptr)rhs); }
+inline bool key_comp_le(base_ptr lhs, base_ptr rhs) { return key_comp_le((link_ptr)lhs, (link_ptr)rhs); }
 
-node * elem;
-bool         is_end;
-//////////////// END DECLARATIONS ////////////////
-//////////////// BEGIN CONSTRUCTORS ////////////////
-private: //////////////////////////////////////////////////// PRIVATE
-explicit const_reverse_iterator( node * const _elem_ptr )
-	: elem( _elem_ptr ), is_end( false ) {}
-explicit const_reverse_iterator( node * const _elem_ptr, bool _is_end )
-	: elem( _elem_ptr ), is_end( _is_end ) {}
-public: //////////////////////////////////////////////////// PUBLIC
-const_reverse_iterator()
-	: elem( nullptr ), is_end( false ) {}
+inline bool key_comp_lt(base_ptr lhs, const key_type& rhs) { return key_comp_lt((link_ptr)lhs, rhs); }
+inline bool key_comp_le(base_ptr lhs, const key_type& rhs) { return key_comp_le((link_ptr)lhs, rhs); }
 
-const_reverse_iterator( reverse_iterator const & _it )
-	: elem( _it.elem ), is_end( _it.is_end ) {}
+inline bool key_comp_lt(const key_type& lhs, base_ptr rhs) { return key_comp_lt(lhs, (link_ptr)rhs); }
+inline bool key_comp_le(const key_type& lhs, base_ptr rhs) { return key_comp_le(lhs, (link_ptr)rhs); }
 
-const_reverse_iterator( const_reverse_iterator const & _other )
-	: elem( _other.elem ), is_end( _other.is_end ) {}
-const_reverse_iterator & operator=( const_reverse_iterator const & _other ) {
-	elem   = _other.elem;
-	is_end = _other.is_end;
+inline bool key_comp_lt(const key_type& lhs, const key_type& rhs) { return     _key_compare(lhs, rhs); }
+inline bool key_comp_le(const key_type& lhs, const key_type& rhs) { return not _key_compare(rhs, lhs); }
+
+inline bool priority_comp_lt(link_ptr lhs, link_ptr rhs) { return lhs->priority < rhs->priority; }
+
+inline bool priority_comp_lt(base_ptr lhs, base_ptr rhs) { return priority_comp_lt((link_ptr)lhs, (link_ptr)rhs); }
+///////////////////////////////////////////////// END COMPARISION /////////////////////////////////////////////////
+///////////////////////////////////////////////// BEGIN NODE /////////////////////////////////////////////////
+protected: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PROTECTED
+inline link_ptr allocate_node()
+{
+    return _link_allocator.allocate(1);
 }
 
-const_reverse_iterator( const_reverse_iterator && _other ) noexcept
-	: elem( _other.elem ), is_end( _other.is_end )
-	{
-		_other.elem = nullptr;
-}
-const_reverse_iterator & operator=( const_reverse_iterator && _other ) noexcept {
-	elem        = _other.elem;
-	is_end      = _other.is_end;
-	_other.elem = nullptr;
-}
-//////////////// END CONSTRUCTORS ////////////////
-//////////////// BEGIN OPERATORS ////////////////
-bool operator==( const_reverse_iterator const & _other ) const noexcept { return is_end == _other.is_end && elem == _other.elem; }
-bool operator!=( const_reverse_iterator const & _other ) const noexcept { return ! operator==( _other ); }
-
-const_reverse_iterator & operator++() try {
-	elem = reverse_iterator_increment_internal( elem, is_end );
-	return * this;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "const_reverse_iterator &", "const_reverse_iterator::operator++()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_reverse_iterator &", "const_reverse_iterator::operator++()" );
-}
-const_reverse_iterator operator++( int ) try {
-	const_reverse_iterator self( * this );
-	operator++();
-	return self;
-} catch( incrementing_past_the_end const & ) {
-	throw incrementing_past_the_end( "const_reverse_iterator", "const_reverse_iterator::operator++(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_reverse_iterator", "const_reverse_iterator::operator++(int)" );
+inline void deallocate_node(link_ptr node)
+{
+    _link_allocator.deallocate(node, 1);
 }
 
-const_reverse_iterator & operator--() try {
-	elem = reverse_iterator_decrement_internal( elem, is_end );
-    return * this;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "const_reverse_iterator &", "const_reverse_iterator::operator--()" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_reverse_iterator &", "const_reverse_iterator::operator--()" );
-}
-const_reverse_iterator operator--( int ) try {
-	const_reverse_iterator self( * this );
-	operator--();
-	return self;
-} catch( decrementing_before_begin const & ) {
-	throw decrementing_before_begin( "const_reverse_iterator", "const_reverse_iterator::operator--(int)" );
-} catch( operation_invalid const & ) {
-	throw operation_invalid( "const_reverse_iterator", "const_reverse_iterator::operator--(int)" );
+template <class... Args>
+inline void construct_node(link_ptr node, Args&&... args)
+{
+    get_allocator().construct(&node->value, std::forward<Args>(args)...);
 }
 
-T const & operator*() const {
-	if( is_end ) throw dereference_past_the_end( "T const &", "const_reverse_iterator::operator*()" );
-	if( elem == nullptr ) throw operation_invalid( "T const &", "const_reverse_iterator::operator*()" );
-	return elem->key;
+inline void destroy_node(link_ptr node)
+{
+    get_allocator().destroy(&node->value);
 }
 
-const_iterator base() const {
-	if( is_end && elem == nullptr ) throw decrementing_before_begin( "const_iterator", "const_reverse_iterator::base()" );
-	bool temp_is_end = is_end;
-	try {
-		return const_iterator( reverse_iterator_decrement_internal( elem, temp_is_end ), temp_is_end );
-    } catch( decrementing_before_begin const & ) {
-		return const_iterator( get_root( elem ), true );
-    } catch( operation_invalid const & ) {
-		throw operation_invalid( "const_iterator", "const_reverse_iterator::base()" );
+template <class... Args>
+link_ptr create_node(Args&&... args)
+{
+    link_ptr node(allocate_node());
+    try {
+        construct_node(node, std::forward<Args>(args)...);
+    } catch (...) {
+        deallocate_node(node);
+        throw;
+    }
+    return node;
+}
+
+inline void delete_node(link_ptr node)
+{
+    destroy_node(node);
+    deallocate_node(node);
+}
+
+void delete_node_tree(base_ptr node)
+{
+    while (node != nullptr && node != get_header()) {
+        destroy_node((link_ptr)node);
+
+        delete_node_tree(node->right);
+
+        node = node->left;
+        deallocate_node((link_ptr)(node->parent));
     }
 }
-//////////////// END OPERATORS ////////////////
 
-};
-///////////////////////////// END ITERATOR CLASS /////////////////////////////
+protected: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PROTECTED
+class tree_node_base
+{
+    friend tree;
 
-};
+    private: ///////////////////////////////////////////////////////////////////////////// PRIVATE
+    base_ptr parent;
+    base_ptr left;
+    base_ptr right;
 
-#endif
+    protected: ///////////////////////////////////////////////////////////////////////////// PROTECTED
+    tree_node_base()                                  = delete;
+    tree_node_base(const tree_node_base&)             = delete;
+    tree_node_base(tree_node_base&&)                  = delete;
+    tree_node_base& operator= (const tree_node_base&) = delete;
+    tree_node_base& operator= (tree_node_base&&)      = delete;
+
+    tree_node_base(
+        base_ptr _parent = nullptr,
+        base_ptr _left   = nullptr,
+        base_ptr _right  = nullptr
+    )
+        : parent(_parent), left(_left), right(_right)
+    { }
+}; // class tree_node_base
+
+class tree_node : protected tree_node_base
+{
+    friend tree;
+
+    private: ///////////////////////////////////////////////////////////////////////////// PRIVATE
+    priority_type priority;
+    value_type    value;
+
+    protected: ///////////////////////////////////////////////////////////////////////////// PROTECTED
+    tree_node()                             = delete;
+    tree_node(const tree_node&)             = delete;
+    tree_node(tree_node&&)                  = delete;
+    tree_node& operator= (const tree_node&) = delete;
+    tree_node& operator= (tree_node&&)      = delete;
+
+    template <class... Args>
+    tree_node(priority_type _priority, Args&&... args)
+        : tree_node_base(), priority(_priority), value(std::forward<Args>(args)...)
+    { }
+
+    const key_type& get_key() const { return KeyOfValue()(value); }
+
+          value_type&& get_value()       { return value; }
+    const value_type&  get_value() const { return value; }
+}; // class tree_node
+
+private: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PRIVATE
+static priority_type generate_random(const random_generator& _random_generator)
+{
+    return _random_generator();
+}
+///////////////////////////////////////////////// END NODE /////////////////////////////////////////////////
+
+///////////////////////////////////////////////// BEGIN ITERATOR /////////////////////////////////////////////////
+public: ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// PUBLIC
+class const_iterator
+{
+    friend tree;
+
+    ///////////////////////////// BEGIN DEFINITIONS /////////////////////////////
+    public: ///////////////////////////////////////////////////////////////////////////// PUBLIC
+    using difference_type   = tree::difference_type;
+    using value_type        = tree::value_type;
+    using pointer           = tree::const_pointer;
+    using reference         = tree::const_reference;
+    using iterator_category = std::bidirectional_iterator_tag;
+
+    const_iterator();
+    const_iterator(const const_iterator&);
+
+    reference operator* () const;
+    pointer operator-> () const;
+
+    const_iterator& operator++ ();
+    const_iterator& operator++ (int);
+    const_iterator& operator-- ();
+    const_iterator& operator-- (int);
+
+    bool operator== (const const_iterator&);
+    bool operator!= (const const_iterator&);
+    ///////////////////////////// END DEFINITIONS /////////////////////////////
+    protected: ///////////////////////////////////////////////////////////////////////////// PROTECTED
+    explicit const_iterator(base_ptr);
+}; // class const_iterator
+///////////////////////////////////////////////// END ITERATOR /////////////////////////////////////////////////
+}; // class tree
+
+
+
+
+// namespace std {
+//     template <class Key, class KeyCompareType, class RNG, class PriorityCompareType, class Allocator>
+//     void swap(const treap<Key, KeyCompareType, RNG, PriorityCompareType, Allocator>& lhs,
+//         const treap<Key, KeyCompareType, RNG, PriorityCompareType, Allocator>& rhs) noexcept(noexcept(lhs.swap(rhs)));
+// } // namespace std
+//
+// #if __cplusplus >= 201700L
+// template<
+//     class InputIt,
+//     class KeyCompareType = std::less<typename std::iterator_traits<InputIt>::value_type>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<typename std::iterator_traits<InputIt>::value_type>
+// >
+// treap(InputIt, InputIt,
+//         KeyCompareType = KeyCompareType(), RNG = RNG(), PriorityCompareType = PriorityCompareType(), Allocator = Allocator()
+//     )
+//     -> treap<typename std::iterator_traits<InputIt>::value_type, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class InputIt,
+//     class KeyCompareType = std::less<typename std::iterator_traits<InputIt>::value_type>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<typename std::iterator_traits<InputIt>::value_type>
+// >
+// treap(InputIt, InputIt, RNG = RNG(), PriorityCompareType = PriorityCompareType(), Allocator = Allocator())
+//     -> treap<typename std::iterator_traits<InputIt>::value_type, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class InputIt,
+//     class KeyCompareType = std::less<typename std::iterator_traits<InputIt>::value_type>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<typename std::iterator_traits<InputIt>::value_type>
+// >
+// treap(InputIt, InputIt, KeyCompareType = KeyCompareType(), Allocator = Allocator())
+//     -> treap<typename std::iterator_traits<InputIt>::value_type, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class InputIt,
+//     class KeyCompareType = std::less<typename std::iterator_traits<InputIt>::value_type>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<typename std::iterator_traits<InputIt>::value_type>
+// >
+// treap(InputIt, InputIt, Allocator = Allocator())
+//     -> treap<typename std::iterator_traits<InputIt>::value_type, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class Key,
+//     class KeyCompareType = std::less<Key>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocatorKey>
+// >
+// treap(std::initializer_list<Key>,
+//         KeyCompareType = KeyCompareType(), RNG = RNG(), PriorityCompareType = PriorityCompareType(), Allocator = Allocator()
+//     )
+//     -> treap<Key, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class Key,
+//     class KeyCompareType = std::less<Key>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<Key>
+// >
+// treap(std::initializer_list<Key>, RNG = RNG(), PriorityCompareType = PriorityCompareType(), Allocator = Allocator())
+//     -> treap<Key, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class Key,
+//     class KeyCompareType = std::less<Key>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<Key>
+// >
+// treap(std::initializer_list<Key>, KeyCompareType = KeyCompareType(), Allocator = Allocator())
+//     -> treap<Key, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+//
+// template<
+//     class Key,
+//     class KeyCompareType = std::less<Key>,
+//     class RNG = std::default_random_engine,
+//     class PriorityCompareType = std::less<RNG::result_type>,
+//     class Allocator = std::allocator<Key>
+// >
+// treap(std::initializer_list<Key>, Allocator = Allocator())
+//     -> treap<Key, KeyCompareType, RNG, PriorityCompareType, Allocator>;
+// #endif //  __cplusplus >= 201700L
+
+
+// std::equal(a.begin(), a.end(), b.begin(), b.end(), comp) // operator==
+
