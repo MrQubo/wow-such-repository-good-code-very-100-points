@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include "treap.h"
+#include "treap.hpp"
 
 #include <sys/resource.h>
 #include <sys/time.h>
